@@ -3,332 +3,213 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Disperse — Positionner des joueurs dans la ville</title>
+<title>Déploiement</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-  :root {
-    --bg: #0d0d0d;
-    --surface: #161616;
-    --border: #2a2a2a;
-    --accent: #e8ff47;
-    --accent2: #ff6b35;
-    --text: #f0f0f0;
-    --muted: #666;
-    --park: #4ade80;
-    --cafe: #fb923c;
-    --shelter: #60a5fa;
-    --transit: #c084fc;
-  }
+:root {
+  --green:       #1a6b3c;
+  --green-mid:   #2d9e5f;
+  --green-light: #e8f5ee;
+  --border:      #dde8e2;
+  --text:        #1a2e24;
+  --muted:       #7a9e8a;
+  --bg:          #f4f7f5;
+  --white:       #ffffff;
+  --red:         #c0392b;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text);
+       display:flex; flex-direction:column; height:100vh; overflow:hidden; }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+/* HEADER */
+header { display:flex; align-items:center; gap:14px; padding:0 20px; height:50px;
+         background:var(--white); border-bottom:1px solid var(--border);
+         box-shadow:0 1px 4px rgba(26,107,60,.06); flex-shrink:0; z-index:1000; }
+.logo { background:var(--green); color:#fff; font-family:'DM Mono',monospace;
+        font-size:.75rem; font-weight:500; padding:4px 9px; letter-spacing:.06em; }
+header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:-.02em; }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Space Mono', monospace;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
+/* LAYOUT */
+.layout { display:grid; grid-template-columns:340px 1fr; flex:1; min-height:0; }
 
-  header {
-    padding: 24px 32px 20px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: baseline;
-    gap: 16px;
-  }
+/* PANEL */
+.panel { background:var(--white); border-right:1px solid var(--border);
+         display:flex; flex-direction:column; overflow:hidden; position:relative; }
+.panel-scroll { flex:1; overflow-y:auto; padding-bottom:90px; }
 
-  header h1 {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 2rem;
-    letter-spacing: -0.04em;
-    color: var(--accent);
-  }
+.section { padding:14px 16px; border-bottom:1px solid var(--border); }
+.section-title { font-size:.6rem; font-weight:700; letter-spacing:.12em;
+                 text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
 
-  header span {
-    color: var(--muted);
-    font-size: 0.75rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
+/* INPUTS */
+.field { margin-bottom:10px; }
+.field:last-child { margin-bottom:0; }
+.field label { display:block; font-size:.68rem; font-weight:500; color:var(--muted);
+               letter-spacing:.05em; text-transform:uppercase; margin-bottom:4px; }
+.field input[type="text"] { width:100%; border:1px solid var(--border); background:var(--bg);
+  color:var(--text); font-family:'DM Sans',sans-serif; font-size:.85rem;
+  padding:8px 10px; outline:none; transition:border-color .15s; border-radius:2px; }
+.field input[type="text"]:focus { border-color:var(--green); }
+.field input[type="text"]::placeholder { color:var(--muted); }
+.range-row { display:flex; gap:10px; }
+.range-row .field { flex:1; }
+.field input[type="range"] { width:100%; accent-color:var(--green); cursor:pointer; margin-top:2px; }
+.range-val { display:flex; justify-content:space-between; align-items:baseline; margin-top:2px; }
+.range-val strong { font-family:'DM Mono',monospace; font-size:1.1rem; color:var(--green); font-weight:500; }
+.range-val small { font-size:.66rem; color:var(--muted); }
 
-  .layout {
-    display: grid;
-    grid-template-columns: 380px 1fr;
-    flex: 1;
-    min-height: 0;
-  }
+/* PLACE TYPES */
+.select-all-row { display:flex; gap:6px; margin-bottom:8px; }
+.btn-small { font-size:.67rem; font-family:'DM Sans',sans-serif; padding:3px 8px;
+             border:1px solid var(--border); background:var(--white); color:var(--muted);
+             cursor:pointer; transition:all .15s; border-radius:2px; }
+.btn-small:hover { border-color:var(--green); color:var(--green); }
 
-  .panel {
-    background: var(--surface);
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-  }
+.place-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+.place-toggle { display:flex; align-items:center; gap:7px; padding:6px 8px;
+                border:1px solid var(--border); background:var(--bg); cursor:pointer;
+                transition:all .15s; user-select:none; border-radius:2px; }
+.place-toggle:hover { border-color:var(--green-mid); background:var(--green-light); }
+.place-toggle.active { border-color:var(--green); background:var(--green-light); }
+.pt-icon { font-size:.95rem; flex-shrink:0; }
+.pt-info { flex:1; min-width:0; }
+.pt-name { font-size:.73rem; font-weight:600; color:var(--text); line-height:1.2; }
+.pt-score { font-size:.6rem; color:var(--muted); font-family:'DM Mono',monospace; }
+.pt-check { width:13px; height:13px; border:1.5px solid var(--border); border-radius:2px;
+            background:var(--white); flex-shrink:0; display:flex; align-items:center;
+            justify-content:center; font-size:.55rem; transition:all .15s; }
+.place-toggle.active .pt-check { background:var(--green); border-color:var(--green); color:#fff; }
 
-  .panel-section {
-    padding: 24px;
-    border-bottom: 1px solid var(--border);
-  }
+/* FOOTER */
+.panel-footer { position:absolute; bottom:0; left:0; width:100%;
+                background:var(--white); border-top:1px solid var(--border); padding:12px 16px; }
+.btn-run { width:100%; background:var(--green); color:#fff; border:none;
+           font-family:'DM Sans',sans-serif; font-weight:700; font-size:.88rem;
+           letter-spacing:.04em; padding:10px; cursor:pointer; transition:all .15s;
+           text-transform:uppercase; border-radius:2px; }
+.btn-run:hover:not(:disabled) { background:var(--green-mid); }
+.btn-run:disabled { background:var(--border); color:var(--muted); cursor:not-allowed; }
 
-  .panel-section h2 {
-    font-family: 'Syne', sans-serif;
-    font-size: 0.7rem;
-    font-weight: 700;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 16px;
-  }
+/* STATUS */
+.status { font-size:.7rem; color:var(--muted); margin-top:7px; min-height:16px;
+          display:flex; align-items:center; gap:6px; font-family:'DM Mono',monospace; }
+.status.running { color:var(--green); }
+.status.error   { color:var(--red); }
+.status.ok      { color:var(--green-mid); }
+.spinner { width:10px; height:10px; border:2px solid var(--green-light);
+           border-top-color:var(--green); border-radius:50%; animation:spin .7s linear infinite;
+           display:none; flex-shrink:0; }
+.status.running .spinner { display:block; }
+@keyframes spin { to { transform:rotate(360deg); } }
 
-  .field {
-    margin-bottom: 16px;
-  }
+/* RESULTS */
+.result-item { padding:11px 16px; border-bottom:1px solid var(--border); cursor:pointer;
+               transition:background .12s; display:flex; align-items:flex-start; gap:10px; }
+.result-item:hover { background:var(--green-light); }
+.result-num { width:26px; height:26px; border-radius:4px; display:flex; align-items:center;
+              justify-content:center; font-weight:700; font-size:.8rem; color:#fff;
+              flex-shrink:0; margin-top:1px; }
+.result-info { flex:1; min-width:0; }
+.result-name { font-size:.82rem; font-weight:600; color:var(--text); }
+.result-meta { font-size:.68rem; color:var(--muted); margin-top:2px; display:flex; gap:8px; flex-wrap:wrap; }
+.result-stars { font-size:.68rem; color:var(--green); margin-top:2px; }
+.result-bonus { font-size:.63rem; color:var(--green-mid); margin-top:3px; line-height:1.5; }
 
-  .field label {
-    display: block;
-    font-size: 0.7rem;
-    color: var(--muted);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-  }
+.stat-row { display:flex; justify-content:space-between; padding:6px 0;
+            border-bottom:1px solid var(--border); font-size:.75rem; }
+.stat-row span { color:var(--muted); }
+.stat-row b { color:var(--green); font-family:'DM Mono',monospace; font-weight:500; }
 
-  .field input {
-    width: 100%;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: 'Space Mono', monospace;
-    font-size: 0.85rem;
-    padding: 10px 12px;
-    outline: none;
-    transition: border-color 0.2s;
-  }
+.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center;
+               padding:40px 20px; color:var(--muted); text-align:center; gap:10px; }
+.empty-state .big { font-size:2.2rem; }
+.empty-state p { font-size:.76rem; line-height:1.6; max-width:220px; }
 
-  .field input:focus {
-    border-color: var(--accent);
-  }
-
-  .field input::placeholder { color: var(--muted); }
-
-  .range-row {
-    display: flex;
-    gap: 12px;
-  }
-
-  .range-row .field { flex: 1; }
-
-  .field input[type="range"] {
-    padding: 4px 0;
-    accent-color: var(--accent);
-    cursor: pointer;
-  }
-
-  .range-val {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 4px;
-  }
-
-  .range-val span {
-    font-size: 1.4rem;
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    color: var(--accent);
-  }
-
-  .range-val small { color: var(--muted); font-size: 0.7rem; }
-
-  .btn-run {
-    width: 100%;
-    background: var(--accent);
-    color: #000;
-    border: none;
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 1rem;
-    letter-spacing: 0.05em;
-    padding: 14px;
-    cursor: pointer;
-    transition: all 0.15s;
-    text-transform: uppercase;
-  }
-
-  .btn-run:hover { background: #fff; }
-  .btn-run:active { transform: scale(0.98); }
-  .btn-run:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
-
-  .status {
-    padding: 16px 24px;
-    font-size: 0.75rem;
-    color: var(--muted);
-    min-height: 48px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .status.running { color: var(--accent); }
-  .status.error { color: var(--accent2); }
-  .status.ok { color: var(--park); }
-
-  .spinner {
-    width: 12px; height: 12px;
-    border: 2px solid var(--accent);
-    border-top-color: transparent;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    display: none;
-  }
-
-  .status.running .spinner { display: block; }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .results-list {
-    flex: 1;
-    padding: 0;
-  }
-
-  .result-item {
-    padding: 14px 24px;
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    transition: background 0.15s;
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .result-item:hover { background: rgba(232,255,71,0.05); }
-
-  .result-num {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 1.1rem;
-    color: var(--accent);
-    min-width: 28px;
-  }
-
-  .result-info { flex: 1; }
-
-  .result-name {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: var(--text);
-    margin-bottom: 3px;
-  }
-
-  .result-meta {
-    font-size: 0.7rem;
-    color: var(--muted);
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .tag {
-    display: inline-block;
-    padding: 2px 7px;
-    font-size: 0.65rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    border-radius: 2px;
-  }
-
-  .tag-park { background: rgba(74,222,128,0.15); color: var(--park); }
-  .tag-cafe { background: rgba(251,146,60,0.15); color: var(--cafe); }
-  .tag-shelter { background: rgba(96,165,250,0.15); color: var(--shelter); }
-  .tag-transit { background: rgba(192,132,252,0.15); color: var(--transit); }
-  .tag-other { background: rgba(255,255,255,0.08); color: var(--muted); }
-
-  #map {
-    width: 100%;
-    height: 100%;
-    min-height: 400px;
-  }
-
-  .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    gap: 12px;
-    color: var(--muted);
-    font-size: 0.75rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    padding: 32px;
-    text-align: center;
-  }
-
-  .empty-state .big { font-size: 3rem; }
-
-  @media (max-width: 768px) {
-    .layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-    .panel { border-right: none; border-bottom: 1px solid var(--border); }
-    #map { min-height: 50vh; }
-  }
+/* MAP */
+#map { width:100%; height:100%; }
+.leaflet-popup-content-wrapper { border-radius:6px; box-shadow:0 2px 16px rgba(0,0,0,.12);
+  border:1px solid var(--border); font-family:'DM Sans',sans-serif; }
+.leaflet-popup-content { margin:12px 14px; }
+.leaflet-control-layers { border:1px solid var(--border) !important; border-radius:6px !important;
+  box-shadow:0 2px 8px rgba(0,0,0,.08) !important; font-family:'DM Sans',sans-serif; font-size:.8rem; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>DISPERSE</h1>
-  <span>Positionner des joueurs dans la ville</span>
+  <div class="logo">D+</div>
+  <h1>Déploiement</h1>
 </header>
 
 <div class="layout">
+
   <div class="panel">
-    <div class="panel-section">
-      <h2>Point central</h2>
-      <div class="field">
-        <label>Adresse de départ</label>
-        <input type="text" id="address" placeholder="Ex: Place Bellecour, Lyon" />
-      </div>
-    </div>
+    <div class="panel-scroll">
 
-    <div class="panel-section">
-      <h2>Paramètres</h2>
-
-      <div class="field">
-        <label>Nombre de joueurs</label>
-        <input type="range" id="nPlayers" min="2" max="20" value="5" />
-        <div class="range-val">
-          <span id="nVal">5</span>
-          <small>joueurs</small>
+      <!-- Adresse -->
+      <div class="section">
+        <div class="section-title">Point central</div>
+        <div class="field">
+          <label>Adresse</label>
+          <input type="text" id="address" placeholder="Ex : Place Bellecour, Lyon" />
         </div>
       </div>
 
-      <div class="field">
-        <label>Temps de marche (minutes)</label>
-        <input type="range" id="tMinutes" min="2" max="30" value="10" />
-        <div class="range-val">
-          <span id="tVal">10</span>
-          <small>min à pied</small>
+      <!-- Paramètres -->
+      <div class="section">
+        <div class="section-title">Paramètres</div>
+        <div class="range-row">
+          <div class="field">
+            <label>Joueurs</label>
+            <input type="range" id="nPlayers" min="2" max="20" value="5"
+              oninput="document.getElementById('nVal').textContent=this.value">
+            <div class="range-val">
+              <strong id="nVal">5</strong><small>personnes</small>
+            </div>
+          </div>
+          <div class="field">
+            <label>Temps cible</label>
+            <input type="range" id="tMinutes" min="2" max="30" value="10"
+              oninput="document.getElementById('tVal').textContent=this.value">
+            <div class="range-val">
+              <strong id="tVal">10</strong><small>min à pied</small>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="panel-section">
-      <button class="btn-run" id="btnRun" onclick="run()">▶ Disperser</button>
-      <div class="status" id="status">En attente…</div>
-    </div>
-
-    <div class="results-list" id="resultsList">
-      <div class="empty-state">
-        <div class="big">◎</div>
-        <div>Lance une recherche pour positionner les joueurs</div>
+      <!-- Types de lieux -->
+      <div class="section">
+        <div class="section-title">Types de lieux</div>
+        <div class="select-all-row">
+          <button class="btn-small" onclick="toggleAll(true)">Tout cocher</button>
+          <button class="btn-small" onclick="toggleAll(false)">Tout décocher</button>
+        </div>
+        <div class="place-grid" id="placeGrid"></div>
       </div>
+
+      <!-- Stats (masqués au départ) -->
+      <div class="section" id="statsSection" style="display:none;">
+        <div class="section-title">Statistiques</div>
+        <div id="statsContent"></div>
+      </div>
+
+      <!-- Résultats -->
+      <div id="resultsList">
+        <div class="empty-state">
+          <div class="big">◎</div>
+          <p>Choisis une adresse, un temps et les types de lieux, puis lance le déploiement.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="panel-footer">
+      <button class="btn-run" id="btnRun" onclick="run()">▶ Déployer</button>
+      <div class="status" id="status"><div class="spinner"></div><span>En attente…</span></div>
     </div>
   </div>
 
@@ -336,271 +217,387 @@
 </div>
 
 <script>
-// ─── Map init ────────────────────────────────────────────────────────────────
-const map = L.map('map', { zoomControl: true }).setView([46.2, 2.3], 6);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  attribution: '© OpenStreetMap © CARTO',
-  maxZoom: 19
-}).addTo(map);
+// ═══════════════════════════════════════════════
+// TYPES DE LIEUX
+// ═══════════════════════════════════════════════
+const PLACE_TYPES = [
+  { id:"park",           label:"Parc",           icon:"🌳", score:9, group:"vert",
+    query:(b)=>`node["leisure"="park"](${b});\n  way["leisure"="park"](${b});` },
+  { id:"garden",         label:"Jardin",          icon:"🌿", score:8, group:"vert",
+    query:(b)=>`node["leisure"="garden"](${b});\n  way["leisure"="garden"](${b});` },
+  { id:"nature_reserve", label:"Réserve",         icon:"🦋", score:7, group:"vert",
+    query:(b)=>`node["leisure"="nature_reserve"](${b});\n  way["leisure"="nature_reserve"](${b});` },
+  { id:"pitch",          label:"Terrain sport",   icon:"⚽", score:7, group:"vert",
+    query:(b)=>`node["leisure"="pitch"](${b});\n  way["leisure"="pitch"](${b});` },
+  { id:"playground",     label:"Aire de jeux",    icon:"🛝", score:7, group:"vert",
+    query:(b)=>`node["leisure"="playground"](${b});` },
+  { id:"square",         label:"Place publique",  icon:"🏛", score:7, group:"vert",
+    query:(b)=>`node["place"="square"](${b});\n  way["place"="square"](${b});` },
+  { id:"viewpoint",      label:"Belvédère",       icon:"🔭", score:7, group:"vert",
+    query:(b)=>`node["tourism"="viewpoint"](${b});` },
+  { id:"fountain",       label:"Fontaine",        icon:"⛲", score:6, group:"vert",
+    query:(b)=>`node["amenity"="fountain"](${b});` },
+  { id:"bench",          label:"Bancs",           icon:"🪑", score:5, group:"urban",
+    query:(b)=>`node["amenity"="bench"](${b});` },
+  { id:"shelter",        label:"Abri",            icon:"🛖", score:6, group:"urban",
+    query:(b)=>`node["amenity"="shelter"](${b});` },
+  { id:"bus_stop",       label:"Arrêt bus",       icon:"🚌", score:5, group:"transit",
+    query:(b)=>`node["highway"="bus_stop"](${b});` },
+  { id:"tram_stop",      label:"Arrêt tram",      icon:"🚃", score:7, group:"transit",
+    query:(b)=>`node["railway"="tram_stop"](${b});` },
+  { id:"station",        label:"Gare / Métro",    icon:"🚇", score:8, group:"transit",
+    query:(b)=>`node["railway"~"^(station|subway_entrance|halt)$"](${b});` },
+  { id:"cafe",           label:"Café",            icon:"☕", score:8, group:"commerce",
+    query:(b)=>`node["amenity"="cafe"](${b});` },
+  { id:"bakery",         label:"Boulangerie",     icon:"🥐", score:7, group:"commerce",
+    query:(b)=>`node["shop"="bakery"](${b});` },
+  { id:"bar",            label:"Bar",             icon:"🍺", score:6, group:"commerce",
+    query:(b)=>`node["amenity"="bar"](${b});` },
+  { id:"restaurant",     label:"Restaurant",      icon:"🍽", score:5, group:"commerce",
+    query:(b)=>`node["amenity"="restaurant"](${b});` },
+  { id:"kiosk",          label:"Kiosque",         icon:"📰", score:6, group:"commerce",
+    query:(b)=>`node["shop"~"^(kiosk|newsagent)$"](${b});` },
+  { id:"marketplace",    label:"Marché",          icon:"🏪", score:6, group:"commerce",
+    query:(b)=>`node["amenity"="marketplace"](${b});` },
+];
 
-let markers = [];
-let centerMarker = null;
+const WAIT_SCORE = Object.fromEntries(PLACE_TYPES.map(p => [p.id, p.score]));
+const activeTypes = new Set(PLACE_TYPES.map(p=>p.id).filter(id=>id!=='restaurant'));
 
-// ─── UI helpers ──────────────────────────────────────────────────────────────
-const nSlider = document.getElementById('nPlayers');
-const tSlider = document.getElementById('tMinutes');
-nSlider.oninput = () => document.getElementById('nVal').textContent = nSlider.value;
-tSlider.oninput = () => document.getElementById('tVal').textContent = tSlider.value;
+function buildPlaceGrid() {
+  const grid = document.getElementById('placeGrid');
+  grid.innerHTML = '';
+  PLACE_TYPES.forEach(pt => {
+    const div = document.createElement('div');
+    div.className = 'place-toggle' + (activeTypes.has(pt.id) ? ' active' : '');
+    div.dataset.id = pt.id;
+    div.innerHTML = `<span class="pt-icon">${pt.icon}</span>
+      <div class="pt-info"><div class="pt-name">${pt.label}</div>
+      <div class="pt-score">score ${pt.score}/10</div></div>
+      <div class="pt-check">${activeTypes.has(pt.id)?'✓':''}</div>`;
+    div.onclick = () => {
+      if (activeTypes.has(pt.id)) {
+        activeTypes.delete(pt.id); div.classList.remove('active'); div.querySelector('.pt-check').textContent='';
+      } else {
+        activeTypes.add(pt.id); div.classList.add('active'); div.querySelector('.pt-check').textContent='✓';
+      }
+    };
+    grid.appendChild(div);
+  });
+}
+function toggleAll(on) {
+  PLACE_TYPES.forEach(pt => { if(on) activeTypes.add(pt.id); else activeTypes.delete(pt.id); });
+  buildPlaceGrid();
+}
+buildPlaceGrid();
 
-function setStatus(msg, type = '') {
+// ═══════════════════════════════════════════════
+// MAP
+// ═══════════════════════════════════════════════
+const map = L.map('map').setView([46.2, 2.3], 6);
+
+const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  { attribution:'© OpenStreetMap © CARTO', maxZoom:19 });
+const satellite  = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  { attribution:'© Esri, Maxar, Earthstar Geographics', maxZoom:19 });
+const osmStd     = L.tileLayer('https://tile.openstreetmap.bzh/br/{z}/{x}/{y}.png',
+  { attribution:'© OpenStreetMap contributors', maxZoom:19 });
+
+cartoLight.addTo(map);
+L.control.layers(
+  { "🗺 Plan clair":cartoLight, "🛰 Satellite":satellite, "🗺 OSM Standard":osmStd },
+  {}, { position:'topright', collapsed:false }
+).addTo(map);
+
+let drawnLayers = [], centerMarker = null;
+
+const COLORS = ["#1a6b3c","#e07b2a","#2d6fa3","#8b3ab8","#c0392b","#1a7a6e","#7d5a00","#1a4f7a","#5a3080","#8b2020"];
+const SECTOR_COLORS = ['#1a6b3c','#2d9e5f','#34c472','#7dcfa4','#b5e8ce'];
+
+// ═══════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════
+function setStatus(msg, type='') {
   const el = document.getElementById('status');
   el.className = 'status ' + type;
   el.innerHTML = `<div class="spinner"></div><span>${msg}</span>`;
 }
 
-function typeTag(type) {
-  if (['park','garden','nature_reserve'].includes(type)) return ['park', '🌳 Parc / Jardin'];
-  if (['cafe','bar','restaurant','fast_food','bakery'].includes(type)) return ['cafe', '☕ Commerce'];
-  if (['shelter','bus_stop'].includes(type)) return ['shelter', '🚌 Abri / Arrêt bus'];
-  if (['station','tram_stop','subway_entrance','halt'].includes(type)) return ['transit', '🚇 Transport en commun'];
-  return ['other', '📍 Lieu'];
-}
-
-// ─── Geocoding ───────────────────────────────────────────────────────────────
-async function geocode(address) {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
-  const res = await fetch(url, { headers: { 'Accept-Language': 'fr' } });
-  const data = await res.json();
-  if (!data.length) throw new Error('Adresse introuvable');
-  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), display: data[0].display_name };
-}
-
-// ─── Overpass candidates ─────────────────────────────────────────────────────
-async function getCandidates(lat, lon, radiusMeters) {
-  const r = Math.round(radiusMeters);
-  const query = `
-    [out:json][timeout:25];
-    (
-      node["leisure"~"^(park|garden|nature_reserve)$"](around:${r},${lat},${lon});
-      way["leisure"~"^(park|garden|nature_reserve)$"](around:${r},${lat},${lon});
-      node["amenity"~"^(cafe|bar|restaurant|fast_food|bakery|shelter)$"](around:${r},${lat},${lon});
-      node["highway"="bus_stop"](around:${r},${lat},${lon});
-      node["railway"~"^(station|tram_stop|subway_entrance|halt)$"](around:${r},${lat},${lon});
-    );
-    out center;
-  `;
-  const res = await fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST', body: 'data=' + encodeURIComponent(query)
-  });
-  const data = await res.json();
-
-  return data.elements.map(el => {
-    const clat = el.lat ?? el.center?.lat;
-    const clon = el.lon ?? el.center?.lon;
-    if (!clat || !clon) return null;
-    const tags = el.tags || {};
-    const type = tags.leisure || tags.amenity || tags.highway || tags.railway || 'other';
-    const name = tags.name || tags['name:fr'] || type;
-    return { id: el.id, lat: clat, lon: clon, name, type };
-  }).filter(Boolean);
-}
-
-// ─── OSRM walking times ───────────────────────────────────────────────────────
-async function getWalkingTimes(origin, candidates) {
-  // OSRM table: batch all candidates in one call
-  const CHUNK = 80; // stay under URL length limits
-  const results = new Array(candidates.length).fill(null);
-
-  for (let i = 0; i < candidates.length; i += CHUNK) {
-    const chunk = candidates.slice(i, i + CHUNK);
-    const coords = [`${origin.lon},${origin.lat}`, ...chunk.map(c => `${c.lon},${c.lat}`)].join(';');
-    const srcIdx = 0;
-    const dstIdxs = chunk.map((_, j) => j + 1).join(';');
-    const url = `https://router.project-osrm.org/table/v1/foot/${coords}?sources=${srcIdx}&destinations=${dstIdxs}&annotations=duration`;
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.durations && data.durations[0]) {
-        data.durations[0].forEach((dur, j) => { results[i + j] = dur; });
-      }
-    } catch(e) { /* chunk failed, keep null */ }
-  }
-  return results; // seconds
-}
-
-// ─── Greedy dispersion ────────────────────────────────────────────────────────
 function haversine(a, b) {
-  const R = 6371000;
-  const dLat = (b.lat - a.lat) * Math.PI / 180;
-  const dLon = (b.lon - a.lon) * Math.PI / 180;
-  const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
-  return 2 * R * Math.asin(Math.sqrt(x));
+  const R=6371000, dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
+  const x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
 }
 
-function greedyDisperse(candidates, n) {
-  if (candidates.length <= n) return candidates;
-  // Start with the candidate farthest from centroid
-  const centLat = candidates.reduce((s,c) => s+c.lat, 0) / candidates.length;
-  const centLon = candidates.reduce((s,c) => s+c.lon, 0) / candidates.length;
-  const centroid = { lat: centLat, lon: centLon };
+function bearing(o, p) {
+  const la1=o.lat*Math.PI/180, la2=p.lat*Math.PI/180, dLon=(p.lon-o.lon)*Math.PI/180;
+  return (Math.atan2(Math.sin(dLon)*Math.cos(la2), Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dLon))*180/Math.PI+360)%360;
+}
 
-  let pool = [...candidates];
-  pool.sort((a,b) => haversine(b, centroid) - haversine(a, centroid));
-  const selected = [pool.shift()];
-
-  while (selected.length < n && pool.length > 0) {
-    let best = null, bestScore = -1;
-    for (const c of pool) {
-      const minDist = Math.min(...selected.map(s => haversine(c, s)));
-      if (minDist > bestScore) { bestScore = minDist; best = c; }
-    }
-    selected.push(best);
-    pool = pool.filter(c => c !== best);
+function greedyDisperse(pool, n) {
+  if (pool.length<=n) return pool;
+  const cl={lat:pool.reduce((s,c)=>s+c.lat,0)/pool.length, lon:pool.reduce((s,c)=>s+c.lon,0)/pool.length};
+  let rem=[...pool].sort((a,b)=>haversine(b,cl)-haversine(a,cl));
+  const sel=[rem.shift()];
+  while (sel.length<n && rem.length) {
+    let best=null, bs=-1;
+    for (const c of rem) { const d=Math.min(...sel.map(s=>haversine(c,s))); if(d>bs){bs=d;best=c;} }
+    sel.push(best); rem=rem.filter(c=>c!==best);
   }
-  return selected;
+  return sel;
 }
 
-// ─── Render results ───────────────────────────────────────────────────────────
-function renderResults(selected, center) {
-  // Clear old markers
-  markers.forEach(m => map.removeLayer(m));
-  markers = [];
+function detectBonuses(tags) {
+  const b=[];
+  if(tags.covered==='yes'||tags.covered==='arcade') b.push('🏠 abrité');
+  if(tags.bench==='yes') b.push('🪑 bancs');
+  if(tags.shelter==='yes') b.push('⛺ abri');
+  if(tags.lit==='yes') b.push('💡 éclairé');
+  if(['paving_stones','asphalt','concrete'].includes(tags.surface)) b.push('🚶 sol dur');
+  if(['yes','public','permissive'].includes(tags.access)) b.push('✅ accès public');
+  if(tags.fee==='no') b.push('🆓 gratuit');
+  return b;
+}
 
-  const colors = ['#e8ff47','#ff6b35','#4ade80','#60a5fa','#c084fc','#f472b6','#fbbf24','#34d399','#e879f9','#38bdf8'];
+function clearMap() {
+  drawnLayers.forEach(l=>map.removeLayer(l)); drawnLayers=[];
+  if(centerMarker){map.removeLayer(centerMarker);centerMarker=null;}
+}
 
-  const list = document.getElementById('resultsList');
-  list.innerHTML = '';
+// ═══════════════════════════════════════════════
+// API CALLS
+// ═══════════════════════════════════════════════
+async function geocode(address) {
+  const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`,{headers:{'Accept-Language':'fr'}});
+  const d=await r.json();
+  if(!d.length) throw new Error('Adresse introuvable');
+  return {lat:parseFloat(d[0].lat),lon:parseFloat(d[0].lon),display:d[0].display_name};
+}
 
-  selected.forEach((place, i) => {
-    const [tagClass, tagLabel] = typeTag(place.type);
-    const color = colors[i % colors.length];
-    const minutes = Math.round(place.walkTime / 60);
+async function fetchCandidates(bbox) {
+  const lines=PLACE_TYPES.filter(pt=>activeTypes.has(pt.id)).map(pt=>pt.query(bbox)).join('\n  ');
+  const query=`[out:json][timeout:30];\n(\n  ${lines}\n);\nout center tags;`;
+  const servers=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+  for(let i=0;i<servers.length*2;i++){
+    try{
+      const r=await fetch(servers[i%servers.length],{method:'POST',
+        body:'data='+encodeURIComponent(query),
+        headers:{'Content-Type':'application/x-www-form-urlencoded','User-Agent':'deploiement/1.0'}});
+      if(r.ok){const d=await r.json();return d.elements||[];}
+    }catch(e){}
+    await new Promise(res=>setTimeout(res,3000));
+  }
+  throw new Error('Overpass inaccessible — réessaie dans quelques secondes');
+}
 
-    // Map marker
-    const icon = L.divIcon({
-      className: '',
-      html: `<div style="
-        width:32px;height:32px;border-radius:50%;
-        background:${color};color:#000;
-        display:flex;align-items:center;justify-content:center;
-        font-family:'Syne',sans-serif;font-weight:800;font-size:14px;
-        border:3px solid #000;box-shadow:0 2px 8px rgba(0,0,0,0.5);
-        cursor:pointer;
-      ">${i+1}</div>`,
-      iconSize: [32, 32], iconAnchor: [16, 16]
-    });
-    const m = L.marker([place.lat, place.lon], { icon })
-      .addTo(map)
-      .bindPopup(`<b>${place.name}</b><br>${tagLabel}<br>⏱ ${minutes} min à pied`);
-    markers.push(m);
+async function getWalkTimes(center, pool) {
+  const coords=[`${center.lon},${center.lat}`,...pool.map(c=>`${c.lon},${c.lat}`)].join(';');
+  const dsts=pool.map((_,i)=>i+1).join(';');
+  const r=await fetch(`https://router.project-osrm.org/table/v1/foot/${coords}?sources=0&destinations=${dsts}&annotations=duration`);
+  const d=await r.json();
+  return (d.durations&&d.durations[0])||[];
+}
+
+// ═══════════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════════
+async function run() {
+  const address=document.getElementById('address').value.trim();
+  const N=parseInt(document.getElementById('nPlayers').value);
+  const T=parseInt(document.getElementById('tMinutes').value);
+  const K=3;
+
+  if(!address){setStatus('Saisis une adresse.','error');return;}
+  if(activeTypes.size===0){setStatus('Sélectionne au moins un type de lieu.','error');return;}
+
+  document.getElementById('btnRun').disabled=true;
+  clearMap();
+  document.getElementById('statsSection').style.display='none';
+  document.getElementById('resultsList').innerHTML='<div class="empty-state"><div class="big">⏳</div><p>Calcul en cours…</p></div>';
+
+  try {
+    // 1 — Geocode
+    setStatus('Géocodage de l\'adresse…','running');
+    const center=await geocode(address);
+
+    centerMarker=L.marker([center.lat,center.lon],{icon:L.divIcon({className:'',
+      html:`<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid #1a6b3c;box-shadow:0 0 10px rgba(26,107,60,.4);"></div>`,
+      iconSize:[18,18],iconAnchor:[9,9]})}).addTo(map)
+      .bindPopup(`<b>Point central</b><br><small style="color:#7a9e8a;">${center.display}</small>`);
+
+    // 2 — Overpass
+    const T_sec=T*60, SPEED=80/60;
+    const rM=T*80*1.6, dLat=rM/111320, dLon=rM/(111320*Math.cos(center.lat*Math.PI/180));
+    const bbox=`${center.lat-dLat},${center.lon-dLon},${center.lat+dLat},${center.lon+dLon}`;
+
+    setStatus(`Recherche des lieux (${activeTypes.size} types actifs)…`,'running');
+    const elements=await fetchCandidates(bbox);
+
+    // Parse
+    const candidates=[];
+    for(const el of elements){
+      const clat=el.lat??el.center?.lat, clon=el.lon??el.center?.lon;
+      if(!clat||!clon) continue;
+      const tags=el.tags||{};
+      const ptype=tags.leisure||tags.amenity||tags.highway||tags.railway||tags.tourism||tags.place||tags.shop||'other';
+      if(!activeTypes.has(ptype)||!WAIT_SCORE[ptype]) continue;
+      const bonuses=detectBonuses(tags);
+      const bonusScore=(tags.covered==='yes'?1:0)+(tags.bench==='yes'?1:0)+(tags.shelter==='yes'?1:0);
+      candidates.push({
+        lat:clat, lon:clon,
+        name:tags.name||tags['name:fr']||ptype,
+        type:ptype,
+        wait_score:WAIT_SCORE[ptype]+bonusScore,
+        tags, bonuses,
+        dist_geo:haversine(center,{lat:clat,lon:clon}),
+        bearing:bearing(center,{lat:clat,lon:clon})
+      });
+    }
+    if(candidates.length<N) throw new Error(`Seulement ${candidates.length} lieux trouvés pour ${N} joueurs. Élargis la sélection ou augmente le temps.`);
+
+    // 3 — Pré-filtre géo
+    const rMin=T_sec*SPEED*0.5, rMax=T_sec*SPEED*1.6;
+    let geoFiltered=candidates.filter(c=>c.dist_geo>=rMin&&c.dist_geo<=rMax);
+    if(geoFiltered.length<N)
+      geoFiltered=[...candidates].sort((a,b)=>Math.abs(a.dist_geo-T_sec*SPEED)-Math.abs(b.dist_geo-T_sec*SPEED)).slice(0,Math.max(N*6,30));
+
+    // 4 — Secteurs
+    const sectorSize=360/N;
+    const sectors=Array.from({length:N},()=>[]);
+    for(const c of geoFiltered) sectors[Math.floor(c.bearing/sectorSize)%N].push(c);
+
+    // 5 — Top K par secteur
+    const prePool=[], emptySectors=[];
+    for(let i=0;i<N;i++){
+      if(!sectors[i].length){emptySectors.push(i);continue;}
+      const sorted=[...sectors[i]].sort((a,b)=>b.wait_score-a.wait_score||(Math.abs(a.dist_geo-T_sec*SPEED)-Math.abs(b.dist_geo-T_sec*SPEED)));
+      prePool.push(...sorted.slice(0,K));
+    }
+    if(!prePool.length) throw new Error('Aucun candidat dans les secteurs.');
+
+    // 6 — OSRM
+    setStatus(`Calcul temps de marche (${prePool.length} lieux)…`,'running');
+    const walkTimes=await getWalkTimes(center,prePool);
+    prePool.forEach((c,i)=>{c.walk_sec=walkTimes[i]??9999;c.walk_min=c.walk_sec/60;});
+
+    // 7 — Sélection 1 par secteur
+    const margin=Math.max(90,T_sec*0.2);
+    const selected=[];
+    const finalEmpty=[...emptySectors];
+
+    for(let i=0;i<N;i++){
+      if(!sectors[i].length) continue;
+      const sTimed=sectors[i].filter(c=>prePool.includes(c));
+      const valid=sTimed.filter(c=>c.walk_sec<9999);
+      if(!valid.length){finalEmpty.push(i);continue;}
+      const inMargin=valid.filter(c=>Math.abs(c.walk_sec-T_sec)<=margin);
+      const pool=inMargin.length?inMargin:valid;
+      pool.sort((a,b)=>Math.abs(a.walk_sec-T_sec)-Math.abs(b.walk_sec-T_sec)||b.wait_score-a.wait_score);
+      selected.push(pool[0]);
+    }
+
+    // Fallback greedy
+    if(finalEmpty.length&&selected.length<N){
+      const already=new Set(selected);
+      const rem=prePool.filter(c=>!already.has(c)&&c.walk_sec<9999)
+        .sort((a,b)=>Math.abs(a.walk_sec-T_sec)-Math.abs(b.walk_sec-T_sec));
+      selected.push(...greedyDisperse(rem,N-selected.length));
+    }
+    if(!selected.length) throw new Error('Aucun résultat. Essaie d\'autres types de lieux.');
+
+    renderResults(selected,center,N,T,T_sec);
+
+  } catch(e) { setStatus('Erreur : '+e.message,'error'); console.error(e); }
+  document.getElementById('btnRun').disabled=false;
+}
+
+// ═══════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════
+function renderResults(selected,center,N,T,T_sec){
+  const wm=selected.map(p=>p.walk_min);
+  const mean=wm.reduce((a,b)=>a+b,0)/wm.length;
+  const std=Math.sqrt(wm.map(t=>(t-mean)**2).reduce((a,b)=>a+b,0)/wm.length);
+  const dists=[];
+  for(let i=0;i<selected.length;i++) for(let j=i+1;j<selected.length;j++) dists.push(haversine(selected[i],selected[j]));
+
+  // Stats
+  document.getElementById('statsSection').style.display='';
+  document.getElementById('statsContent').innerHTML=`
+    <div class="stat-row"><span>Temps moyen</span><b>${mean.toFixed(1)} min</b></div>
+    <div class="stat-row"><span>Écart-type</span><b>${std.toFixed(2)} min</b></div>
+    <div class="stat-row"><span>Min / Max</span><b>${Math.min(...wm).toFixed(1)} / ${Math.max(...wm).toFixed(1)} min</b></div>
+    <div class="stat-row"><span>Distance min entre joueurs</span><b>${Math.round(Math.min(...dists))} m</b></div>
+    <div class="stat-row"><span>Distance max entre joueurs</span><b>${Math.round(Math.max(...dists))} m</b></div>`;
+
+  // Secteurs sur la carte
+  const refR=T*80, sectorSize=360/N;
+  for(let i=0;i<N;i++){
+    const a0=(i*360/N-90)*Math.PI/180, a1=((i+1)*360/N-90)*Math.PI/180;
+    const pts=[[center.lat,center.lon]];
+    for(let s=0;s<=20;s++){
+      const a=a0+(a1-a0)*s/20;
+      pts.push([center.lat+refR*Math.cos(a)/111320, center.lon+refR*Math.sin(a)/(111320*Math.cos(center.lat*Math.PI/180))]);
+    }
+    pts.push([center.lat,center.lon]);
+    drawnLayers.push(L.polygon(pts,{color:SECTOR_COLORS[i%SECTOR_COLORS.length],weight:1,opacity:0.3,fillOpacity:0.04}).addTo(map));
+  }
+
+  // Liste + marqueurs
+  const list=document.getElementById('resultsList');
+  list.innerHTML='';
+
+  selected.forEach((p,i)=>{
+    const color=COLORS[i%COLORS.length];
+    const ptDef=PLACE_TYPES.find(pt=>pt.id===p.type);
+    const icon=ptDef?ptDef.icon:'📍';
+    const stars='★'.repeat(Math.min(p.wait_score,10))+'☆'.repeat(Math.max(0,10-p.wait_score));
+
+    // Popup
+    const bonusItems=p.bonuses.map(b=>`<div style="padding:3px 0;border-bottom:1px solid #eee;font-size:12px;">${b}</div>`).join('');
+    const bonusSection=p.bonuses.length?`
+      <div style="margin-top:8px;padding-top:6px;border-top:2px solid #1a6b3c;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#7a9e8a;margin-bottom:4px;">Points bonus</div>
+        ${bonusItems}
+      </div>`:'';
+    const popup=`<div style="min-width:190px;font-family:'DM Sans',sans-serif;">
+      <div style="font-weight:700;font-size:14px;color:#1a2e24;margin-bottom:3px;">
+        <span style="display:inline-block;width:20px;height:20px;border-radius:3px;background:${color};color:#fff;text-align:center;line-height:20px;font-size:11px;margin-right:5px;">${i+1}</span>${p.name}
+      </div>
+      <div style="color:#7a9e8a;font-size:12px;">${icon} ${p.type}</div>
+      <div style="margin-top:6px;font-size:13px;">⏱ <b>${p.walk_min.toFixed(1)} min</b> à pied</div>
+      <div style="color:#1a6b3c;font-size:12px;margin-top:2px;">${stars} <b>${p.wait_score}/10</b></div>
+      ${bonusSection}
+      <div style="margin-top:6px;font-size:10px;color:#aaa;font-family:monospace;">${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div>
+    </div>`;
+
+    // Marker
+    const marker=L.marker([p.lat,p.lon],{icon:L.divIcon({className:'',
+      html:`<div style="width:30px;height:30px;border-radius:5px;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;font-weight:700;font-size:13px;border:2px solid rgba(0,0,0,.12);box-shadow:0 2px 8px rgba(0,0,0,.2);">${i+1}</div>`,
+      iconSize:[30,30],iconAnchor:[15,15]})}).addTo(map).bindPopup(popup);
+    const line=L.polyline([[center.lat,center.lon],[p.lat,p.lon]],{color:'#1a6b3c',opacity:0.22,weight:1.5,dashArray:'5 7'}).addTo(map);
+    drawnLayers.push(marker,line);
 
     // List item
-    const item = document.createElement('div');
-    item.className = 'result-item';
-    item.innerHTML = `
-      <div class="result-num">${i+1}</div>
+    const item=document.createElement('div');
+    item.className='result-item';
+    item.innerHTML=`
+      <div class="result-num" style="background:${color}">${i+1}</div>
       <div class="result-info">
-        <div class="result-name">${place.name}</div>
-        <div class="result-meta">
-          <span class="tag tag-${tagClass}">${tagLabel}</span>
-          <span>⏱ ${minutes} min à pied</span>
-        </div>
-      </div>
-    `;
-    item.onclick = () => { map.setView([place.lat, place.lon], 17); m.openPopup(); };
+        <div class="result-name">${p.name}</div>
+        <div class="result-meta"><span>${icon} ${p.type}</span><span>⏱ ${p.walk_min.toFixed(1)} min</span></div>
+        <div class="result-stars">${stars} ${p.wait_score}/10</div>
+        ${p.bonuses.length?`<div class="result-bonus">${p.bonuses.join(' · ')}</div>`:''}
+      </div>`;
+    item.onclick=()=>{map.setView([p.lat,p.lon],17);marker.openPopup();};
     list.appendChild(item);
   });
 
-  // Draw lines from center
-  selected.forEach(place => {
-    L.polyline([[center.lat, center.lon],[place.lat, place.lon]], {
-      color: '#ffffff', opacity: 0.1, weight: 1, dashArray: '4 6'
-    }).addTo(map);
-  });
-
-  // Fit map
-  const allPoints = [[center.lat, center.lon], ...selected.map(p => [p.lat, p.lon])];
-  map.fitBounds(allPoints, { padding: [40, 40] });
+  map.fitBounds([[center.lat,center.lon],...selected.map(p=>[p.lat,p.lon])],{padding:[40,40]});
+  setStatus(`${selected.length} positions trouvées ✓`,'ok');
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-async function run() {
-  const address = document.getElementById('address').value.trim();
-  const n = parseInt(nSlider.value);
-  const t = parseInt(tSlider.value);
-
-  if (!address) { setStatus('Saisis une adresse.', 'error'); return; }
-
-  const btn = document.getElementById('btnRun');
-  btn.disabled = true;
-
-  try {
-    // 1. Geocode
-    setStatus('Géocodage de l\'adresse…', 'running');
-    const center = await geocode(address);
-
-    // Update center marker
-    if (centerMarker) map.removeLayer(centerMarker);
-    centerMarker = L.marker([center.lat, center.lon], {
-      icon: L.divIcon({
-        className: '',
-        html: `<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid #e8ff47;box-shadow:0 0 12px rgba(232,255,71,0.6);"></div>`,
-        iconSize: [18,18], iconAnchor: [9,9]
-      })
-    }).addTo(map).bindPopup(`<b>Point central</b><br>${center.display}`);
-    map.setView([center.lat, center.lon], 15);
-
-    // 2. Overpass
-    setStatus('Recherche des lieux d\'attente…', 'running');
-    // Estimate radius: T min * 80 m/min * 1.4 security factor
-    const radius = t * 80 * 1.4;
-    let candidates = await getCandidates(center.lat, center.lon, radius);
-
-    if (candidates.length < n) {
-      setStatus(`Seulement ${candidates.length} lieux trouvés, essaie un rayon plus grand.`, 'error');
-      btn.disabled = false; return;
-    }
-
-    // 3. OSRM
-    setStatus(`Calcul des temps de marche pour ${candidates.length} lieux…`, 'running');
-    const times = await getWalkingTimes(center, candidates);
-    candidates = candidates.map((c, i) => ({ ...c, walkTime: times[i] }))
-                           .filter(c => c.walkTime !== null);
-
-    // 4. Filter
-    const tSec = t * 60;
-    const margin = Math.max(120, tSec * 0.3); // ±30% or ±2min
-    let filtered = candidates.filter(c => c.walkTime >= tSec - margin && c.walkTime <= tSec + margin);
-
-    // Widen if not enough
-    if (filtered.length < n) {
-      candidates.sort((a,b) => Math.abs(a.walkTime - tSec) - Math.abs(b.walkTime - tSec));
-      filtered = candidates.slice(0, Math.min(n * 4, candidates.length));
-    }
-
-    if (filtered.length < n) {
-      setStatus(`Pas assez de lieux trouvés (${filtered.length}). Essaie une autre adresse ou réduis le nombre de joueurs.`, 'error');
-      btn.disabled = false; return;
-    }
-
-    // 5. Disperse
-    setStatus('Calcul de la dispersion optimale…', 'running');
-    const selected = greedyDisperse(filtered, n);
-
-    // 6. Render
-    renderResults(selected, center);
-    setStatus(`${selected.length} positions trouvées ✓`, 'ok');
-
-  } catch(err) {
-    setStatus('Erreur : ' + err.message, 'error');
-    console.error(err);
-  }
-
-  btn.disabled = false;
-}
-
-// Enter key
-document.getElementById('address').addEventListener('keydown', e => { if(e.key === 'Enter') run(); });
+document.getElementById('address').addEventListener('keydown',e=>{if(e.key==='Enter')run();});
 </script>
 </body>
 </html>
