@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Disperse — Positionner des joueurs dans la ville</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #0d0d0d;
+    --surface: #161616;
+    --border: #2a2a2a;
+    --accent: #e8ff47;
+    --accent2: #ff6b35;
+    --text: #f0f0f0;
+    --muted: #666;
+    --park: #4ade80;
+    --cafe: #fb923c;
+    --shelter: #60a5fa;
+    --transit: #c084fc;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 24px 32px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+
+  header h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 2rem;
+    letter-spacing: -0.04em;
+    color: var(--accent);
+  }
+
+  header span {
+    color: var(--muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .panel {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .panel-section {
+    padding: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-section h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  .field {
+    margin-bottom: 16px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .field input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .field input:focus {
+    border-color: var(--accent);
+  }
+
+  .field input::placeholder { color: var(--muted); }
+
+  .range-row {
+    display: flex;
+    gap: 12px;
+  }
+
+  .range-row .field { flex: 1; }
+
+  .field input[type="range"] {
+    padding: 4px 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .range-val {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4px;
+  }
+
+  .range-val span {
+    font-size: 1.4rem;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    color: var(--accent);
+  }
+
+  .range-val small { color: var(--muted); font-size: 0.7rem; }
+
+  .btn-run {
+    width: 100%;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+    padding: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+
+  .btn-run:hover { background: #fff; }
+  .btn-run:active { transform: scale(0.98); }
+  .btn-run:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+
+  .status {
+    padding: 16px 24px;
+    font-size: 0.75rem;
+    color: var(--muted);
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status.running { color: var(--accent); }
+  .status.error { color: var(--accent2); }
+  .status.ok { color: var(--park); }
+
+  .spinner {
+    width: 12px; height: 12px;
+    border: 2px solid var(--accent);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+
+  .status.running .spinner { display: block; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .results-list {
+    flex: 1;
+    padding: 0;
+  }
+
+  .result-item {
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .result-item:hover { background: rgba(232,255,71,0.05); }
+
+  .result-num {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: var(--accent);
+    min-width: 28px;
+  }
+
+  .result-info { flex: 1; }
+
+  .result-name {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+
+  .result-meta {
+    font-size: 0.7rem;
+    color: var(--muted);
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 7px;
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 2px;
+  }
+
+  .tag-park { background: rgba(74,222,128,0.15); color: var(--park); }
+  .tag-cafe { background: rgba(251,146,60,0.15); color: var(--cafe); }
+  .tag-shelter { background: rgba(96,165,250,0.15); color: var(--shelter); }
+  .tag-transit { background: rgba(192,132,252,0.15); color: var(--transit); }
+  .tag-other { background: rgba(255,255,255,0.08); color: var(--muted); }
+
+  #map {
+    width: 100%;
+    height: 100%;
+    min-height: 400px;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    color: var(--muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 32px;
+    text-align: center;
+  }
+
+  .empty-state .big { font-size: 3rem; }
+
+  @media (max-width: 768px) {
+    .layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    .panel { border-right: none; border-bottom: 1px solid var(--border); }
+    #map { min-height: 50vh; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>DISPERSE</h1>
+  <span>Positionner des joueurs dans la ville</span>
+</header>
+
+<div class="layout">
+  <div class="panel">
+    <div class="panel-section">
+      <h2>Point central</h2>
+      <div class="field">
+        <label>Adresse de départ</label>
+        <input type="text" id="address" placeholder="Ex: Place Bellecour, Lyon" />
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h2>Paramètres</h2>
+
+      <div class="field">
+        <label>Nombre de joueurs</label>
+        <input type="range" id="nPlayers" min="2" max="20" value="5" />
+        <div class="range-val">
+          <span id="nVal">5</span>
+          <small>joueurs</small>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Temps de marche (minutes)</label>
+        <input type="range" id="tMinutes" min="2" max="30" value="10" />
+        <div class="range-val">
+          <span id="tVal">10</span>
+          <small>min à pied</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <button class="btn-run" id="btnRun" onclick="run()">▶ Disperser</button>
+      <div class="status" id="status">En attente…</div>
+    </div>
+
+    <div class="results-list" id="resultsList">
+      <div class="empty-state">
+        <div class="big">◎</div>
+        <div>Lance une recherche pour positionner les joueurs</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+</div>
+
+<script>
+// ─── Map init ────────────────────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: true }).setView([46.2, 2.3], 6);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap © CARTO',
+  maxZoom: 19
+}).addTo(map);
+
+let markers = [];
+let centerMarker = null;
+
+// ─── UI helpers ──────────────────────────────────────────────────────────────
+const nSlider = document.getElementById('nPlayers');
+const tSlider = document.getElementById('tMinutes');
+nSlider.oninput = () => document.getElementById('nVal').textContent = nSlider.value;
+tSlider.oninput = () => document.getElementById('tVal').textContent = tSlider.value;
+
+function setStatus(msg, type = '') {
+  const el = document.getElementById('status');
+  el.className = 'status ' + type;
+  el.innerHTML = `<div class="spinner"></div><span>${msg}</span>`;
+}
+
+function typeTag(type) {
+  if (['park','garden','nature_reserve'].includes(type)) return ['park', '🌳 Parc / Jardin'];
+  if (['cafe','bar','restaurant','fast_food','bakery'].includes(type)) return ['cafe', '☕ Commerce'];
+  if (['shelter','bus_stop'].includes(type)) return ['shelter', '🚌 Abri / Arrêt bus'];
+  if (['station','tram_stop','subway_entrance','halt'].includes(type)) return ['transit', '🚇 Transport en commun'];
+  return ['other', '📍 Lieu'];
+}
+
+// ─── Geocoding ───────────────────────────────────────────────────────────────
+async function geocode(address) {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
+  const res = await fetch(url, { headers: { 'Accept-Language': 'fr' } });
+  const data = await res.json();
+  if (!data.length) throw new Error('Adresse introuvable');
+  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), display: data[0].display_name };
+}
+
+// ─── Overpass candidates ─────────────────────────────────────────────────────
+async function getCandidates(lat, lon, radiusMeters) {
+  const r = Math.round(radiusMeters);
+  const query = `
+    [out:json][timeout:25];
+    (
+      node["leisure"~"^(park|garden|nature_reserve)$"](around:${r},${lat},${lon});
+      way["leisure"~"^(park|garden|nature_reserve)$"](around:${r},${lat},${lon});
+      node["amenity"~"^(cafe|bar|restaurant|fast_food|bakery|shelter)$"](around:${r},${lat},${lon});
+      node["highway"="bus_stop"](around:${r},${lat},${lon});
+      node["railway"~"^(station|tram_stop|subway_entrance|halt)$"](around:${r},${lat},${lon});
+    );
+    out center;
+  `;
+  const res = await fetch('https://overpass-api.de/api/interpreter', {
+    method: 'POST', body: 'data=' + encodeURIComponent(query)
+  });
+  const data = await res.json();
+
+  return data.elements.map(el => {
+    const clat = el.lat ?? el.center?.lat;
+    const clon = el.lon ?? el.center?.lon;
+    if (!clat || !clon) return null;
+    const tags = el.tags || {};
+    const type = tags.leisure || tags.amenity || tags.highway || tags.railway || 'other';
+    const name = tags.name || tags['name:fr'] || type;
+    return { id: el.id, lat: clat, lon: clon, name, type };
+  }).filter(Boolean);
+}
+
+// ─── OSRM walking times ───────────────────────────────────────────────────────
+async function getWalkingTimes(origin, candidates) {
+  // OSRM table: batch all candidates in one call
+  const CHUNK = 80; // stay under URL length limits
+  const results = new Array(candidates.length).fill(null);
+
+  for (let i = 0; i < candidates.length; i += CHUNK) {
+    const chunk = candidates.slice(i, i + CHUNK);
+    const coords = [`${origin.lon},${origin.lat}`, ...chunk.map(c => `${c.lon},${c.lat}`)].join(';');
+    const srcIdx = 0;
+    const dstIdxs = chunk.map((_, j) => j + 1).join(';');
+    const url = `https://router.project-osrm.org/table/v1/foot/${coords}?sources=${srcIdx}&destinations=${dstIdxs}&annotations=duration`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.durations && data.durations[0]) {
+        data.durations[0].forEach((dur, j) => { results[i + j] = dur; });
+      }
+    } catch(e) { /* chunk failed, keep null */ }
+  }
+  return results; // seconds
+}
+
+// ─── Greedy dispersion ────────────────────────────────────────────────────────
+function haversine(a, b) {
+  const R = 6371000;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLon = (b.lon - a.lon) * Math.PI / 180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+function greedyDisperse(candidates, n) {
+  if (candidates.length <= n) return candidates;
+  // Start with the candidate farthest from centroid
+  const centLat = candidates.reduce((s,c) => s+c.lat, 0) / candidates.length;
+  const centLon = candidates.reduce((s,c) => s+c.lon, 0) / candidates.length;
+  const centroid = { lat: centLat, lon: centLon };
+
+  let pool = [...candidates];
+  pool.sort((a,b) => haversine(b, centroid) - haversine(a, centroid));
+  const selected = [pool.shift()];
+
+  while (selected.length < n && pool.length > 0) {
+    let best = null, bestScore = -1;
+    for (const c of pool) {
+      const minDist = Math.min(...selected.map(s => haversine(c, s)));
+      if (minDist > bestScore) { bestScore = minDist; best = c; }
+    }
+    selected.push(best);
+    pool = pool.filter(c => c !== best);
+  }
+  return selected;
+}
+
+// ─── Render results ───────────────────────────────────────────────────────────
+function renderResults(selected, center) {
+  // Clear old markers
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+
+  const colors = ['#e8ff47','#ff6b35','#4ade80','#60a5fa','#c084fc','#f472b6','#fbbf24','#34d399','#e879f9','#38bdf8'];
+
+  const list = document.getElementById('resultsList');
+  list.innerHTML = '';
+
+  selected.forEach((place, i) => {
+    const [tagClass, tagLabel] = typeTag(place.type);
+    const color = colors[i % colors.length];
+    const minutes = Math.round(place.walkTime / 60);
+
+    // Map marker
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="
+        width:32px;height:32px;border-radius:50%;
+        background:${color};color:#000;
+        display:flex;align-items:center;justify-content:center;
+        font-family:'Syne',sans-serif;font-weight:800;font-size:14px;
+        border:3px solid #000;box-shadow:0 2px 8px rgba(0,0,0,0.5);
+        cursor:pointer;
+      ">${i+1}</div>`,
+      iconSize: [32, 32], iconAnchor: [16, 16]
+    });
+    const m = L.marker([place.lat, place.lon], { icon })
+      .addTo(map)
+      .bindPopup(`<b>${place.name}</b><br>${tagLabel}<br>⏱ ${minutes} min à pied`);
+    markers.push(m);
+
+    // List item
+    const item = document.createElement('div');
+    item.className = 'result-item';
+    item.innerHTML = `
+      <div class="result-num">${i+1}</div>
+      <div class="result-info">
+        <div class="result-name">${place.name}</div>
+        <div class="result-meta">
+          <span class="tag tag-${tagClass}">${tagLabel}</span>
+          <span>⏱ ${minutes} min à pied</span>
+        </div>
+      </div>
+    `;
+    item.onclick = () => { map.setView([place.lat, place.lon], 17); m.openPopup(); };
+    list.appendChild(item);
+  });
+
+  // Draw lines from center
+  selected.forEach(place => {
+    L.polyline([[center.lat, center.lon],[place.lat, place.lon]], {
+      color: '#ffffff', opacity: 0.1, weight: 1, dashArray: '4 6'
+    }).addTo(map);
+  });
+
+  // Fit map
+  const allPoints = [[center.lat, center.lon], ...selected.map(p => [p.lat, p.lon])];
+  map.fitBounds(allPoints, { padding: [40, 40] });
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+async function run() {
+  const address = document.getElementById('address').value.trim();
+  const n = parseInt(nSlider.value);
+  const t = parseInt(tSlider.value);
+
+  if (!address) { setStatus('Saisis une adresse.', 'error'); return; }
+
+  const btn = document.getElementById('btnRun');
+  btn.disabled = true;
+
+  try {
+    // 1. Geocode
+    setStatus('Géocodage de l\'adresse…', 'running');
+    const center = await geocode(address);
+
+    // Update center marker
+    if (centerMarker) map.removeLayer(centerMarker);
+    centerMarker = L.marker([center.lat, center.lon], {
+      icon: L.divIcon({
+        className: '',
+        html: `<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid #e8ff47;box-shadow:0 0 12px rgba(232,255,71,0.6);"></div>`,
+        iconSize: [18,18], iconAnchor: [9,9]
+      })
+    }).addTo(map).bindPopup(`<b>Point central</b><br>${center.display}`);
+    map.setView([center.lat, center.lon], 15);
+
+    // 2. Overpass
+    setStatus('Recherche des lieux d\'attente…', 'running');
+    // Estimate radius: T min * 80 m/min * 1.4 security factor
+    const radius = t * 80 * 1.4;
+    let candidates = await getCandidates(center.lat, center.lon, radius);
+
+    if (candidates.length < n) {
+      setStatus(`Seulement ${candidates.length} lieux trouvés, essaie un rayon plus grand.`, 'error');
+      btn.disabled = false; return;
+    }
+
+    // 3. OSRM
+    setStatus(`Calcul des temps de marche pour ${candidates.length} lieux…`, 'running');
+    const times = await getWalkingTimes(center, candidates);
+    candidates = candidates.map((c, i) => ({ ...c, walkTime: times[i] }))
+                           .filter(c => c.walkTime !== null);
+
+    // 4. Filter
+    const tSec = t * 60;
+    const margin = Math.max(120, tSec * 0.3); // ±30% or ±2min
+    let filtered = candidates.filter(c => c.walkTime >= tSec - margin && c.walkTime <= tSec + margin);
+
+    // Widen if not enough
+    if (filtered.length < n) {
+      candidates.sort((a,b) => Math.abs(a.walkTime - tSec) - Math.abs(b.walkTime - tSec));
+      filtered = candidates.slice(0, Math.min(n * 4, candidates.length));
+    }
+
+    if (filtered.length < n) {
+      setStatus(`Pas assez de lieux trouvés (${filtered.length}). Essaie une autre adresse ou réduis le nombre de joueurs.`, 'error');
+      btn.disabled = false; return;
+    }
+
+    // 5. Disperse
+    setStatus('Calcul de la dispersion optimale…', 'running');
+    const selected = greedyDisperse(filtered, n);
+
+    // 6. Render
+    renderResults(selected, center);
+    setStatus(`${selected.length} positions trouvées ✓`, 'ok');
+
+  } catch(err) {
+    setStatus('Erreur : ' + err.message, 'error');
+    console.error(err);
+  }
+
+  btn.disabled = false;
+}
+
+// Enter key
+document.getElementById('address').addEventListener('keydown', e => { if(e.key === 'Enter') run(); });
+</script>
+</body>
+</html>
