@@ -193,6 +193,24 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
   transition: transform 0.15s;
 }
 
+/* SCORE STEPPER +/- dans les types de lieux */
+.score-stepper {
+  display:flex; align-items:center; gap:4px; margin-top:4px;
+}
+.score-btn {
+  width:16px; height:16px; border-radius:3px;
+  border:1px solid var(--border); background:var(--white);
+  color:var(--muted); font-size:.75rem; line-height:1;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  padding:0; transition:all .12s; flex-shrink:0;
+}
+.score-btn:hover { border-color:var(--green); color:var(--green); background:var(--green-light); }
+.score-val {
+  font-family:'DM Mono',monospace; font-size:.65rem;
+  color:var(--green); font-weight:700;
+  min-width:14px; text-align:center;
+}
+
 /* WALK TIME DISPLAY */
 .time-real { color:var(--green); }
 .time-est  { color:var(--muted); font-style:italic; }
@@ -599,19 +617,16 @@ function buildPlaceGrid() {
       <span class="pt-icon">${pt.icon}</span>
       <div class="pt-info">
         <div class="pt-name">${pt.label}</div>
-        <div style="display:flex;align-items:center;gap:5px;margin-top:3px;">
-          <input type="range" min="0" max="10" step="1" value="${score}"
-            style="flex:1;accent-color:var(--green);cursor:pointer;height:3px;"
-            oninput="onTypeScoreInput('${pt.id}', this.value, this)"
-            onclick="event.stopPropagation()">
-          <span id="tsval-${pt.id}" style="font-family:'DM Mono',monospace;font-size:.65rem;
-            color:var(--green);font-weight:600;min-width:14px;text-align:right;">${score}</span>
+        <div class="score-stepper" onclick="event.stopPropagation()">
+          <button class="score-btn" onclick="changeTypeScore('${pt.id}',-1)">−</button>
+          <span id="tsval-${pt.id}" class="score-val">${score}</span>
+          <button class="score-btn" onclick="changeTypeScore('${pt.id}',+1)">+</button>
         </div>
       </div>
       <div class="pt-check">${isActive ? '✓' : ''}</div>`;
 
     div.onclick = (e) => {
-      if (e.target.tagName === 'INPUT') return;
+      if (e.target.closest('.score-stepper')) return;
       if (activeTypes.has(pt.id)) {
         activeTypes.delete(pt.id);
         div.classList.remove('active');
@@ -626,7 +641,13 @@ function buildPlaceGrid() {
   });
 }
 
-function onTypeScoreInput(id, val, sliderEl) {
+function changeTypeScore(id, delta) {
+  customScores[id] = Math.max(0, Math.min(10, (customScores[id] ?? 5) + delta));
+  const lbl = document.getElementById('tsval-' + id);
+  if (lbl) lbl.textContent = customScores[id];
+}
+
+function onTypeScoreInput(id, val) {
   customScores[id] = parseInt(val);
   const lbl = document.getElementById('tsval-' + id);
   if (lbl) lbl.textContent = val;
@@ -2310,117 +2331,265 @@ async function importVersion(event) {
 // ═══════════════════════════════════════════════════════════
 // EXPORT PNG / PDF
 // ═══════════════════════════════════════════════════════════
+// EXPORT PNG — rendu canvas natif (pas de lib externe)
+// ═══════════════════════════════════════════════════════════
 async function exportMapPNG() {
-  if (!D.selected.length) {
+  if (!D.selected.length || !D.center) {
     showModal('Rien à exporter', 'Lance un déploiement avant d\'exporter la carte.');
     return;
   }
   setStatus('Génération PNG…', 'running');
 
-  try {
-    // Charger leaflet-image dynamiquement si pas encore chargé
-    await loadScript('https://unpkg.com/leaflet-image@0.4.0/leaflet-image.js');
+  const W = 900, H = 600;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
 
-    leafletImage(map, function(err, canvas) {
-      if (err) {
-        setStatus('Erreur PNG : ' + err, 'error');
-        return;
-      }
+  // ── Fond blanc
+  ctx.fillStyle = '#f4f7f5';
+  ctx.fillRect(0, 0, W, H);
 
-      // Ajouter une légende sur le canvas
-      const ctx    = canvas.getContext('2d');
-      const legend = buildLegendLines();
-      const padX   = 14, padY = 12, lineH = 18, boxW = 220;
-      const boxH   = legend.length * lineH + padY * 2;
-      const bx     = canvas.width - boxW - 12;
-      const by     = canvas.height - boxH - 12;
+  // ── Calcul des bornes géo → pixels
+  const allPts = [D.center, ...D.selected];
+  let minLat = Math.min(...allPts.map(p=>p.lat));
+  let maxLat = Math.max(...allPts.map(p=>p.lat));
+  let minLon = Math.min(...allPts.map(p=>p.lon));
+  let maxLon = Math.max(...allPts.map(p=>p.lon));
 
-      // Fond blanc semi-transparent
-      ctx.fillStyle = 'rgba(255,255,255,0.88)';
-      if (ctx.roundRect) {
-        ctx.beginPath();
-        ctx.roundRect(bx, by, boxW, boxH, 6);
-        ctx.fill();
-      } else {
-        ctx.fillRect(bx, by, boxW, boxH);
-      }
+  // Marge 20%
+  const padLat = (maxLat - minLat) * 0.3 || 0.003;
+  const padLon = (maxLon - minLon) * 0.3 || 0.004;
+  minLat -= padLat; maxLat += padLat;
+  minLon -= padLon; maxLon += padLon;
 
-      // Texte
-      ctx.fillStyle = '#1a2e24';
-      ctx.font = 'bold 11px sans-serif';
-      ctx.fillText('Déploiement+', bx + padX, by + padY + 11);
-      ctx.font = '10px sans-serif';
-      legend.forEach((line, i) => {
-        ctx.fillStyle = line.color || '#4a6e5a';
-        ctx.fillText(line.text, bx + padX, by + padY + 11 + (i + 1) * lineH);
-      });
+  // Zone de dessin (laisse place légende à droite)
+  const mapW = W - 230, mapH = H - 40, mapX = 20, mapY = 20;
 
-      // Télécharger
-      const link = document.createElement('a');
-      link.download = `deploiement_${Date.now()}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-      setStatus('PNG exporté ✓', 'ok');
-    });
-  } catch(e) {
-    // Fallback : screenshot simple via html2canvas si leaflet-image échoue
-    setStatus('Essai méthode alternative…', 'running');
-    try {
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
-      const mapEl = document.getElementById('map');
-      const canvas = await html2canvas(mapEl, {
-        useCORS: true, allowTaint: true, scale: 2,
-        logging: false,
-      });
-      appendLegendToCanvas(canvas);
-      const link = document.createElement('a');
-      link.download = `deploiement_${Date.now()}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-      setStatus('PNG exporté ✓', 'ok');
-    } catch(e2) {
-      setStatus('Export PNG non supporté dans ce navigateur', 'error');
-    }
+  function toXY(lat, lon) {
+    const x = mapX + (lon - minLon) / (maxLon - minLon) * mapW;
+    const y = mapY + (1 - (lat - minLat) / (maxLat - minLat)) * mapH;
+    return [x, y];
   }
-}
 
-function buildLegendLines() {
-  const lines = [];
-  const addr = (D.center?.display || '').split(',').slice(0, 2).join(',');
-  lines.push({ text: addr.substring(0, 32), color: '#7a9e8a' });
-  lines.push({ text: `${D.selected.length} joueurs · trajet ${getMinTimeMinutes()}–${D.T} min`, color: '#1a6b3c' });
-  D.selected.slice(0, 8).forEach((p, i) => {
-    const wm = (p.walk_min_adj || p.walk_min).toFixed(1);
-    lines.push({
-      text: `${i+1}. ${p.name.substring(0,22)} · ${wm}min`,
-      color: COLORS[i % COLORS.length]
+  // ── Fond carte OSM via Static Maps (tentative, fallback quadrillage)
+  await drawMapBackground(ctx, mapX, mapY, mapW, mapH, minLat, maxLat, minLon, maxLon);
+
+  // ── Cercles d'exclusion
+  const spacing = getMinSpacing();
+  if (spacing > 0) {
+    const metersPerPixelLon = (maxLon - minLon) / mapW * 111320 * Math.cos(D.center.lat * Math.PI/180);
+    D.selected.forEach((p, i) => {
+      const [cx, cy] = toXY(p.lat, p.lon);
+      const r = (spacing / metersPerPixelLon);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = COLORS[i % COLORS.length] + '55';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.fillStyle = COLORS[i % COLORS.length] + '11';
+      ctx.fill();
+      ctx.setLineDash([]);
     });
+  }
+
+  // ── Lignes centre → points
+  const [cxC, cyC] = toXY(D.center.lat, D.center.lon);
+  D.selected.forEach((p, i) => {
+    const [px, py] = toXY(p.lat, p.lon);
+    ctx.beginPath();
+    ctx.moveTo(cxC, cyC);
+    ctx.lineTo(px, py);
+    ctx.strokeStyle = COLORS[i % COLORS.length] + '66';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
   });
-  if (D.selected.length > 8) {
-    lines.push({ text: `… +${D.selected.length - 8} autres`, color: '#aaa' });
-  }
-  return lines;
+
+  // ── Points joueurs
+  D.selected.forEach((p, i) => {
+    const [px, py] = toXY(p.lat, p.lon);
+    const col = COLORS[i % COLORS.length];
+    // Ombre
+    ctx.shadowColor = 'rgba(0,0,0,0.25)';
+    ctx.shadowBlur  = 6;
+    // Carré coloré
+    ctx.fillStyle = col;
+    roundRect(ctx, px - 13, py - 13, 26, 26, 5);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // Numéro
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px DM Sans, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(i + 1), px, py);
+  });
+
+  // ── Point central
+  const [cxF, cyF] = toXY(D.center.lat, D.center.lon);
+  ctx.shadowColor = 'rgba(26,107,60,0.4)';
+  ctx.shadowBlur  = 10;
+  ctx.beginPath();
+  ctx.arc(cxF, cyF, 9, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.strokeStyle = '#1a6b3c';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // ── Légende
+  drawLegend(ctx, W - 220, 20, 205, H - 40);
+
+  // ── Titre + date
+  ctx.fillStyle = '#1a2e24';
+  ctx.font = 'bold 11px DM Mono, monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('DÉPLOIEMENT+', mapX, H - 8);
+  ctx.fillStyle = '#7a9e8a';
+  ctx.font = '9px DM Mono, monospace';
+  ctx.fillText(new Date().toLocaleString('fr-FR', {dateStyle:'short', timeStyle:'short'}), mapX + 110, H - 8);
+
+  // ── Téléchargement
+  const link = document.createElement('a');
+  link.download = `deploiement_${Date.now()}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  setStatus('PNG exporté ✓', 'ok');
 }
 
-function appendLegendToCanvas(canvas) {
+// Fond de carte : grille géo légère (pas de dépendance externe)
+async function drawMapBackground(ctx, x, y, w, h, minLat, maxLat, minLon, maxLon) {
+  // Fond clair
+  ctx.fillStyle = '#eef2ef';
+  ctx.fillRect(x, y, w, h);
+
+  // Grille de coordonnées
+  ctx.strokeStyle = '#d0ddd5';
+  ctx.lineWidth = 0.5;
+  const gridN = 5;
+  for (let i = 1; i < gridN; i++) {
+    const gx = x + (w / gridN) * i;
+    const gy = y + (h / gridN) * i;
+    ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx, y + h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x + w, gy); ctx.stroke();
+  }
+
+  // Essaie de charger une tuile OSM simplifiée via tile serveur public
   try {
-    const ctx    = canvas.getContext('2d');
-    const legend = buildLegendLines();
-    const padX   = 14, padY = 12, lineH = 36, boxW = 440;
-    const boxH   = legend.length * lineH + padY * 2;
-    const bx     = canvas.width  - boxW - 12;
-    const by     = canvas.height - boxH - 12;
-    ctx.fillStyle = 'rgba(255,255,255,0.88)';
-    ctx.fillRect(bx, by, boxW, boxH);
-    ctx.font = 'bold 14px sans-serif';
+    const zoom = getBestZoom(maxLat - minLat, maxLon - minLon);
+    const cLat = (minLat + maxLat) / 2, cLon = (minLon + maxLon) / 2;
+    // Utilise l'API staticmap d'OpenStreetMap (pas de clé requise)
+    const url = `https://staticmap.openstreetmap.de/staticmap.php?center=${cLat},${cLon}&zoom=${zoom}&size=${w}x${h}&maptype=mapnik`;
+    const img = await loadImageCORS(url);
+    ctx.drawImage(img, x, y, w, h);
+  } catch(e) {
+    // Fond grille seulement (déjà dessiné)
+  }
+}
+
+function getBestZoom(dLat, dLon) {
+  const span = Math.max(dLat, dLon);
+  if (span > 0.2) return 12;
+  if (span > 0.05) return 14;
+  if (span > 0.01) return 15;
+  return 16;
+}
+
+function loadImageCORS(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload  = () => resolve(img);
+    img.onerror = () => reject(new Error('img load failed'));
+    setTimeout(() => reject(new Error('timeout')), 4000);
+    img.src = src;
+  });
+}
+
+function drawLegend(ctx, x, y, w, h) {
+  // Fond
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  roundRect(ctx, x, y, w, h, 6);
+  ctx.fill();
+  ctx.strokeStyle = '#dde8e2';
+  ctx.lineWidth = 1;
+  roundRect(ctx, x, y, w, h, 6);
+  ctx.stroke();
+
+  const pad = 12;
+  let cy = y + pad + 12;
+
+  // Titre
+  ctx.fillStyle = '#1a6b3c';
+  ctx.font = 'bold 10px DM Mono, monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('DÉPLOIEMENT+', x + pad, cy);
+  cy += 14;
+
+  // Adresse
+  ctx.fillStyle = '#7a9e8a';
+  ctx.font = '9px sans-serif';
+  const addr = (D.center?.display || '').split(',').slice(0,2).join(',').substring(0, 28);
+  ctx.fillText(addr, x + pad, cy);
+  cy += 12;
+
+  // Fenêtre de temps
+  ctx.fillStyle = '#1a2e24';
+  ctx.font = '9px sans-serif';
+  ctx.fillText(`${getMinTimeMinutes()}–${D.T} min · ${D.selected.length} pts`, x + pad, cy);
+  cy += 16;
+
+  // Séparateur
+  ctx.strokeStyle = '#dde8e2';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(x + pad, cy); ctx.lineTo(x + w - pad, cy);
+  ctx.stroke();
+  cy += 10;
+
+  // Liste des points
+  const lineH = Math.min(18, (h - (cy - y) - pad) / Math.max(1, D.selected.length));
+  D.selected.forEach((p, i) => {
+    if (cy + lineH > y + h - pad) return;
+    const col = COLORS[i % COLORS.length];
+    // Carré couleur
+    ctx.fillStyle = col;
+    roundRect(ctx, x + pad, cy - 8, 11, 11, 2);
+    ctx.fill();
+    // Numéro
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 7px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(i+1), x + pad + 5.5, cy);
+    // Nom + temps
     ctx.fillStyle = '#1a2e24';
-    ctx.fillText('Déploiement+', bx + padX, by + padY + 14);
-    ctx.font = '12px sans-serif';
-    legend.forEach((line, i) => {
-      ctx.fillStyle = line.color || '#4a6e5a';
-      ctx.fillText(line.text, bx + padX, by + padY + 14 + (i + 1) * lineH);
-    });
-  } catch(e) {}
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'left';
+    const wm = (p.walk_min_adj || p.walk_min).toFixed(1);
+    const label = `${p.name.substring(0, 18)} · ${wm}min`;
+    ctx.fillText(label, x + pad + 15, cy);
+    cy += lineH;
+  });
+}
+
+// Helper roundRect compatible tous navigateurs
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 function loadScript(src) {
