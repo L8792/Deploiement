@@ -3,11 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Déploiement</title>
+<title>Déploiement+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Turf.js pour point-in-polygon (isochrone C1) -->
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
 <style>
 :root {
   --green:       #1a6b3c;
@@ -19,6 +21,8 @@
   --bg:          #f4f7f5;
   --white:       #ffffff;
   --red:         #c0392b;
+  --orange:      #e07b2a;
+  --yellow:      #c8970a;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text);
@@ -30,7 +34,7 @@ header { display:flex; align-items:center; gap:14px; padding:0 20px; height:50px
          box-shadow:0 1px 4px rgba(26,107,60,.06); flex-shrink:0; z-index:1000; }
 .logo { background:var(--green); color:#fff; font-family:'DM Mono',monospace;
         font-size:.75rem; font-weight:500; padding:4px 9px; letter-spacing:.06em; }
-header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:-.02em; }
+header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:-.02em; flex:1; }
 
 /* LAYOUT */
 .layout { display:grid; grid-template-columns:340px 1fr; flex:1; min-height:0; }
@@ -38,7 +42,7 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
 /* PANEL */
 .panel { background:var(--white); border-right:1px solid var(--border);
          display:flex; flex-direction:column; overflow:hidden; position:relative; }
-.panel-scroll { flex:1; overflow-y:auto; padding-bottom:90px; }
+.panel-scroll { flex:1; overflow-y:auto; padding-bottom:140px; }
 
 .section { padding:14px 16px; border-bottom:1px solid var(--border); }
 .section-title { font-size:.6rem; font-weight:700; letter-spacing:.12em;
@@ -61,12 +65,30 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
 .range-val strong { font-family:'DM Mono',monospace; font-size:1.1rem; color:var(--green); font-weight:500; }
 .range-val small { font-size:.66rem; color:var(--muted); }
 
+/* ADDRESS ROW */
+.address-row { display:flex; gap:6px; align-items:flex-end; }
+.address-row .field { flex:1; margin-bottom:0; }
+.btn-geolocate { flex-shrink:0; height:34px; width:34px; border:1px solid var(--border);
+  background:var(--bg); color:var(--muted); cursor:pointer; border-radius:2px;
+  font-size:.9rem; transition:all .15s; display:flex; align-items:center; justify-content:center; }
+.btn-geolocate:hover { border-color:var(--green); color:var(--green); background:var(--green-light); }
+
+/* SCORING WEIGHTS */
+.weights-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:6px; }
+.weight-field { text-align:center; }
+.weight-field label { display:block; font-size:.6rem; font-weight:600; color:var(--muted);
+  letter-spacing:.05em; text-transform:uppercase; margin-bottom:4px; }
+.weight-field input[type="range"] { width:100%; accent-color:var(--green); }
+.weight-field .wval { font-family:'DM Mono',monospace; font-size:.8rem; color:var(--green);
+  font-weight:500; margin-top:2px; }
+
 /* PLACE TYPES */
 .select-all-row { display:flex; gap:6px; margin-bottom:8px; }
 .btn-small { font-size:.67rem; font-family:'DM Sans',sans-serif; padding:3px 8px;
              border:1px solid var(--border); background:var(--white); color:var(--muted);
              cursor:pointer; transition:all .15s; border-radius:2px; }
 .btn-small:hover { border-color:var(--green); color:var(--green); }
+.btn-small.active { border-color:var(--green); background:var(--green-light); color:var(--green); }
 
 .place-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
 .place-toggle { display:flex; align-items:center; gap:7px; padding:6px 8px;
@@ -82,6 +104,28 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
             background:var(--white); flex-shrink:0; display:flex; align-items:center;
             justify-content:center; font-size:.55rem; transition:all .15s; }
 .place-toggle.active .pt-check { background:var(--green); border-color:var(--green); color:#fff; }
+
+/* PROGRESS STEPPER (E1) */
+.progress-stepper { padding:12px 16px; border-bottom:1px solid var(--border); display:none; }
+.progress-stepper.visible { display:block; }
+.stepper-title { font-size:.6rem; font-weight:700; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+.step-item { display:flex; align-items:center; gap:8px; padding:4px 0;
+  font-size:.72rem; color:var(--muted); transition:color .2s; }
+.step-item.running { color:var(--green); }
+.step-item.done { color:var(--green-mid); }
+.step-item.error { color:var(--red); }
+.step-dot { width:16px; height:16px; border-radius:50%; border:1.5px solid var(--border);
+  flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:.55rem;
+  transition:all .2s; background:var(--white); }
+.step-item.running .step-dot { border-color:var(--green); background:var(--green-light);
+  animation:pulse-dot .8s ease-in-out infinite alternate; }
+.step-item.done .step-dot { border-color:var(--green-mid); background:var(--green-mid); color:#fff; }
+.step-item.error .step-dot { border-color:var(--red); background:var(--red); color:#fff; }
+@keyframes pulse-dot { from { box-shadow:0 0 0 0 rgba(26,107,60,.3); }
+                        to   { box-shadow:0 0 0 4px rgba(26,107,60,0); } }
+.step-detail { font-family:'DM Mono',monospace; font-size:.62rem; color:var(--muted);
+  margin-top:2px; padding-left:24px; }
 
 /* FOOTER */
 .panel-footer { position:absolute; bottom:0; left:0; width:100%;
@@ -117,6 +161,7 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
 .result-meta { font-size:.68rem; color:var(--muted); margin-top:2px; display:flex; gap:8px; flex-wrap:wrap; }
 .result-stars { font-size:.68rem; color:var(--green); margin-top:2px; }
 .result-bonus { font-size:.63rem; color:var(--green-mid); margin-top:3px; line-height:1.5; }
+.result-discretion { font-size:.62rem; margin-top:2px; }
 
 .stat-row { display:flex; justify-content:space-between; padding:6px 0;
             border-bottom:1px solid var(--border); font-size:.75rem; }
@@ -128,6 +173,12 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
 .empty-state .big { font-size:2.2rem; }
 .empty-state p { font-size:.76rem; line-height:1.6; max-width:220px; }
 
+/* ISOCHRONE STATUS */
+.iso-badge { display:inline-block; font-size:.6rem; font-family:'DM Mono',monospace;
+  padding:2px 6px; border-radius:2px; margin-left:6px; }
+.iso-badge.active { background:var(--green-light); color:var(--green); border:1px solid var(--green); }
+.iso-badge.fallback { background:#fff8e1; color:#c8970a; border:1px solid #c8970a; }
+
 /* MAP */
 #map { width:100%; height:100%; }
 .leaflet-popup-content-wrapper { border-radius:6px; box-shadow:0 2px 16px rgba(0,0,0,.12);
@@ -135,26 +186,39 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
 .leaflet-popup-content { margin:12px 14px; }
 .leaflet-control-layers { border:1px solid var(--border) !important; border-radius:6px !important;
   box-shadow:0 2px 8px rgba(0,0,0,.08) !important; font-family:'DM Sans',sans-serif; font-size:.8rem; }
+
+/* MARKER HIGHLIGHT */
+.marker-highlight > div {
+  transform: scale(1.4) !important;
+  filter: drop-shadow(0 0 8px rgba(26,107,60,.6));
+  transition: transform 0.15s;
+}
+
+/* WALK TIME DISPLAY */
+.time-real { color:var(--green); }
+.time-est  { color:var(--muted); font-style:italic; }
 </style>
 </head>
 <body>
 
 <header>
   <div class="logo">D+</div>
-  <h1>Déploiement</h1>
+  <h1>Déploiement+</h1>
 </header>
 
 <div class="layout">
-
   <div class="panel">
     <div class="panel-scroll">
 
       <!-- Adresse -->
       <div class="section">
         <div class="section-title">Point central</div>
-        <div class="field">
-          <label>Adresse</label>
-          <input type="text" id="address" placeholder="Ex : Place Bellecour, Lyon" />
+        <div class="address-row">
+          <div class="field">
+            <label>Adresse</label>
+            <input type="text" id="address" placeholder="Ex : Place Bellecour, Lyon" />
+          </div>
+          <button class="btn-geolocate" onclick="geolocateMe()" title="Ma position GPS">📍</button>
         </div>
       </div>
 
@@ -175,8 +239,68 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
             <input type="range" id="tMinutes" min="2" max="30" value="10"
               oninput="document.getElementById('tVal').textContent=this.value">
             <div class="range-val">
-              <strong id="tVal">10</strong><small>min à pied</small>
+              <strong id="tVal">10</strong><small>min</small>
             </div>
+          </div>
+        </div>
+
+        <!-- C2 — Vitesse de marche configurable -->
+        <div class="field" style="margin-top:10px;">
+          <label>Vitesse de marche</label>
+          <div style="display:flex; gap:4px; margin-bottom:6px; flex-wrap:wrap;">
+            <button class="btn-small" onclick="setSpeed(2.5)">🐢 2.5</button>
+            <button class="btn-small active" id="speedPreset35" onclick="setSpeed(3.5)">🚶 3.5</button>
+            <button class="btn-small" onclick="setSpeed(5)">🏃 5.0</button>
+            <button class="btn-small" onclick="setSpeed(12)">🚴 12</button>
+          </div>
+          <input type="range" id="walkSpeed" min="2" max="15" step="0.5" value="3.5"
+            oninput="onSpeedInput(this.value)">
+          <div class="range-val">
+            <strong id="speedVal">3.5</strong><small>km/h</small>
+          </div>
+        </div>
+
+        <!-- Mode isochrone toggle -->
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;">
+          <label style="font-size:.68rem; font-weight:500; color:var(--muted); letter-spacing:.05em; text-transform:uppercase;">
+            Zone isochrone
+          </label>
+          <div style="display:flex; gap:4px; align-items:center;">
+            <label class="toggle-switch">
+              <input type="checkbox" id="isochroneToggle" checked>
+              <span class="toggle-slider"></span>
+            </label>
+            <span id="isoBadge" class="iso-badge active">Valhalla</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- B4 — Poids de scoring -->
+      <div class="section">
+        <div class="section-title">Pondération du score</div>
+        <div style="display:flex; gap:6px; margin-bottom:8px;">
+          <button class="btn-small active" id="preset-balanced" onclick="applyPreset('balanced')">⚖️ Équilibré</button>
+          <button class="btn-small" id="preset-comfort" onclick="applyPreset('comfort')">🛋 Confort</button>
+          <button class="btn-small" id="preset-discret" onclick="applyPreset('discret')">🫥 Discrétion</button>
+        </div>
+        <div class="weights-row">
+          <div class="weight-field">
+            <label>Type</label>
+            <input type="range" id="wType" min="0" max="10" value="5" step="1"
+              oninput="document.getElementById('wTypeVal').textContent=this.value">
+            <div class="wval" id="wTypeVal">5</div>
+          </div>
+          <div class="weight-field">
+            <label>Confort</label>
+            <input type="range" id="wComfort" min="0" max="10" value="3" step="1"
+              oninput="document.getElementById('wComfortVal').textContent=this.value">
+            <div class="wval" id="wComfortVal">3</div>
+          </div>
+          <div class="weight-field">
+            <label>Discrétion</label>
+            <input type="range" id="wDiscretion" min="0" max="10" value="2" step="1"
+              oninput="document.getElementById('wDiscretionVal').textContent=this.value">
+            <div class="wval" id="wDiscretionVal">2</div>
           </div>
         </div>
       </div>
@@ -191,7 +315,13 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
         <div class="place-grid" id="placeGrid"></div>
       </div>
 
-      <!-- Stats (masqués au départ) -->
+      <!-- E1 — Progress stepper -->
+      <div class="progress-stepper" id="progressStepper">
+        <div class="stepper-title">Progression</div>
+        <div id="stepperContent"></div>
+      </div>
+
+      <!-- Stats -->
       <div class="section" id="statsSection" style="display:none;">
         <div class="section-title">Statistiques</div>
         <div id="statsContent"></div>
@@ -216,53 +346,113 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
   <div id="map"></div>
 </div>
 
+<!-- Toggle switch CSS inline (pour isochrone) -->
+<style>
+.toggle-switch { position:relative; display:inline-block; width:32px; height:18px; }
+.toggle-switch input { opacity:0; width:0; height:0; }
+.toggle-slider { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0;
+  background:var(--border); border-radius:18px; transition:.2s; }
+.toggle-slider:before { position:absolute; content:""; height:12px; width:12px;
+  left:3px; bottom:3px; background:white; border-radius:50%; transition:.2s; }
+.toggle-switch input:checked + .toggle-slider { background:var(--green); }
+.toggle-switch input:checked + .toggle-slider:before { transform:translateX(14px); }
+</style>
+
 <script>
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// A4 — REGISTRE CENTRALISÉ (plus de variables window[key])
+// ═══════════════════════════════════════════════════════════
+window.D = {
+  altRegistry:  {},   // altKey → candidat
+  popupState:   {},   // 'p{idx}' → { playerIdx, color, currentCandidate }
+  selected:     [],
+  prePool:      [],
+  geoFiltered:  [],
+  center:       null,
+  N:            5,
+  T:            10,
+  markers:      [],
+  lines:        [],
+  isochronePoly: null,
+  cache: {
+    overpass: new Map(),  // B2
+    osrm:     new Map(),  // B2
+  }
+};
+
+// ═══════════════════════════════════════════════════════════
 // TYPES DE LIEUX
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 const PLACE_TYPES = [
   { id:"park",           label:"Parc",           icon:"🌳", score:9, group:"vert",
-    query:(b)=>`node["leisure"="park"](${b});\n  way["leisure"="park"](${b});` },
+    query:(b)=>`node["leisure"="park"](${b});\n  way["leisure"="park"](${b});`,
+    matchTags: t => t.leisure === 'park' },
   { id:"garden",         label:"Jardin",          icon:"🌿", score:8, group:"vert",
-    query:(b)=>`node["leisure"="garden"](${b});\n  way["leisure"="garden"](${b});` },
+    query:(b)=>`node["leisure"="garden"](${b});\n  way["leisure"="garden"](${b});`,
+    matchTags: t => t.leisure === 'garden' },
   { id:"nature_reserve", label:"Réserve",         icon:"🦋", score:7, group:"vert",
-    query:(b)=>`node["leisure"="nature_reserve"](${b});\n  way["leisure"="nature_reserve"](${b});` },
+    query:(b)=>`node["leisure"="nature_reserve"](${b});\n  way["leisure"="nature_reserve"](${b});`,
+    matchTags: t => t.leisure === 'nature_reserve' },
   { id:"pitch",          label:"Terrain sport",   icon:"⚽", score:7, group:"vert",
-    query:(b)=>`node["leisure"="pitch"](${b});\n  way["leisure"="pitch"](${b});` },
+    query:(b)=>`node["leisure"="pitch"](${b});\n  way["leisure"="pitch"](${b});`,
+    matchTags: t => t.leisure === 'pitch' },
   { id:"playground",     label:"Aire de jeux",    icon:"🛝", score:7, group:"vert",
-    query:(b)=>`node["leisure"="playground"](${b});` },
+    query:(b)=>`node["leisure"="playground"](${b});`,
+    matchTags: t => t.leisure === 'playground' },
   { id:"square",         label:"Place publique",  icon:"🏛", score:7, group:"vert",
-    query:(b)=>`node["place"="square"](${b});\n  way["place"="square"](${b});` },
+    query:(b)=>`node["place"="square"](${b});\n  way["place"="square"](${b});`,
+    matchTags: t => t.place === 'square' },
   { id:"viewpoint",      label:"Belvédère",       icon:"🔭", score:7, group:"vert",
-    query:(b)=>`node["tourism"="viewpoint"](${b});` },
+    query:(b)=>`node["tourism"="viewpoint"](${b});`,
+    matchTags: t => t.tourism === 'viewpoint' },
   { id:"fountain",       label:"Fontaine",        icon:"⛲", score:6, group:"vert",
-    query:(b)=>`node["amenity"="fountain"](${b});` },
+    query:(b)=>`node["amenity"="fountain"](${b});`,
+    matchTags: t => t.amenity === 'fountain' },
   { id:"bench",          label:"Bancs",           icon:"🪑", score:5, group:"urban",
-    query:(b)=>`node["amenity"="bench"](${b});` },
+    query:(b)=>`node["amenity"="bench"](${b});`,
+    matchTags: t => t.amenity === 'bench' },
   { id:"shelter",        label:"Abri",            icon:"🛖", score:6, group:"urban",
-    query:(b)=>`node["amenity"="shelter"](${b});` },
+    query:(b)=>`node["amenity"="shelter"](${b});`,
+    matchTags: t => t.amenity === 'shelter' },
   { id:"bus_stop",       label:"Arrêt bus",       icon:"🚌", score:5, group:"transit",
-    query:(b)=>`node["highway"="bus_stop"](${b});` },
+    query:(b)=>`node["highway"="bus_stop"](${b});`,
+    matchTags: t => t.highway === 'bus_stop' },
   { id:"tram_stop",      label:"Arrêt tram",      icon:"🚃", score:7, group:"transit",
-    query:(b)=>`node["railway"="tram_stop"](${b});` },
+    query:(b)=>`node["railway"="tram_stop"](${b});`,
+    matchTags: t => t.railway === 'tram_stop' },
   { id:"station",        label:"Gare / Métro",    icon:"🚇", score:8, group:"transit",
-    query:(b)=>`node["railway"~"^(station|subway_entrance|halt)$"](${b});` },
+    query:(b)=>`node["railway"~"^(station|subway_entrance|halt)$"](${b});`,
+    matchTags: t => /^(station|subway_entrance|halt)$/.test(t.railway) },
   { id:"cafe",           label:"Café",            icon:"☕", score:8, group:"commerce",
-    query:(b)=>`node["amenity"="cafe"](${b});` },
+    query:(b)=>`node["amenity"="cafe"](${b});`,
+    matchTags: t => t.amenity === 'cafe' },
   { id:"bakery",         label:"Boulangerie",     icon:"🥐", score:7, group:"commerce",
-    query:(b)=>`node["shop"="bakery"](${b});` },
+    query:(b)=>`node["shop"="bakery"](${b});`,
+    matchTags: t => t.shop === 'bakery' },
   { id:"bar",            label:"Bar",             icon:"🍺", score:6, group:"commerce",
-    query:(b)=>`node["amenity"="bar"](${b});` },
+    query:(b)=>`node["amenity"="bar"](${b});`,
+    matchTags: t => t.amenity === 'bar' },
   { id:"restaurant",     label:"Restaurant",      icon:"🍽", score:5, group:"commerce",
-    query:(b)=>`node["amenity"="restaurant"](${b});` },
+    query:(b)=>`node["amenity"="restaurant"](${b});`,
+    matchTags: t => t.amenity === 'restaurant' },
   { id:"kiosk",          label:"Kiosque",         icon:"📰", score:6, group:"commerce",
-    query:(b)=>`node["shop"~"^(kiosk|newsagent)$"](${b});` },
+    query:(b)=>`node["shop"~"^(kiosk|newsagent)$"](${b});`,
+    matchTags: t => /^(kiosk|newsagent)$/.test(t.shop) },
   { id:"marketplace",    label:"Marché",          icon:"🏪", score:6, group:"commerce",
-    query:(b)=>`node["amenity"="marketplace"](${b});` },
+    query:(b)=>`node["amenity"="marketplace"](${b});`,
+    matchTags: t => t.amenity === 'marketplace' },
 ];
 
-const WAIT_SCORE = Object.fromEntries(PLACE_TYPES.map(p => [p.id, p.score]));
 const activeTypes = new Set(PLACE_TYPES.map(p=>p.id).filter(id=>id!=='restaurant'));
+
+// A2 — Matching explicite des types OSM
+function detectType(tags) {
+  for (const pt of PLACE_TYPES) {
+    if (!activeTypes.has(pt.id)) continue;
+    if (pt.matchTags(tags)) return pt.id;
+  }
+  return null;
+}
 
 function buildPlaceGrid() {
   const grid = document.getElementById('placeGrid');
@@ -291,18 +481,118 @@ function toggleAll(on) {
 }
 buildPlaceGrid();
 
-// ═══════════════════════════════════════════════
-// MAP
-// ═══════════════════════════════════════════════
-const map = L.map('map').setView([46.2, 2.3], 6);
+// ═══════════════════════════════════════════════════════════
+// C2 — VITESSE CONFIGURABLE
+// ═══════════════════════════════════════════════════════════
+function setSpeed(kmh) {
+  document.getElementById('walkSpeed').value = kmh;
+  document.getElementById('speedVal').textContent = kmh;
+  // Update preset buttons
+  ['speedPreset35'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.remove('active');
+  });
+  // Highlight matching preset if exists
+}
+function onSpeedInput(val) {
+  document.getElementById('speedVal').textContent = val;
+}
+function getSpeedKmh() {
+  return parseFloat(document.getElementById('walkSpeed').value) || 3.5;
+}
+function getOsrmProfile() {
+  return getSpeedKmh() > 6 ? 'bicycle' : 'foot';
+}
 
+// C3 — Facteur correction urbain
+const URBAN_DETOUR_FACTOR = 1.35;
+
+function estimateWalkSec(distGeo, speedKmh) {
+  const speedMs = speedKmh * 1000 / 3600;
+  return (distGeo * URBAN_DETOUR_FACTOR) / speedMs;
+}
+
+// ═══════════════════════════════════════════════════════════
+// B4 — PRESETS DE SCORING
+// ═══════════════════════════════════════════════════════════
+const SCORE_PRESETS = {
+  balanced: { type: 5, comfort: 3, discretion: 2 },
+  comfort:  { type: 3, comfort: 6, discretion: 1 },
+  discret:  { type: 2, comfort: 2, discretion: 6 },
+};
+function applyPreset(name) {
+  const p = SCORE_PRESETS[name];
+  if (!p) return;
+  document.getElementById('wType').value = p.type;
+  document.getElementById('wTypeVal').textContent = p.type;
+  document.getElementById('wComfort').value = p.comfort;
+  document.getElementById('wComfortVal').textContent = p.comfort;
+  document.getElementById('wDiscretion').value = p.discretion;
+  document.getElementById('wDiscretionVal').textContent = p.discretion;
+  // Update preset buttons
+  ['balanced','comfort','discret'].forEach(id => {
+    const btn = document.getElementById('preset-'+id);
+    if (btn) btn.classList.toggle('active', id === name);
+  });
+}
+
+function getWeights() {
+  const t = parseInt(document.getElementById('wType').value) || 5;
+  const c = parseInt(document.getElementById('wComfort').value) || 3;
+  const d = parseInt(document.getElementById('wDiscretion').value) || 2;
+  const total = t + c + d || 1;
+  return { type: t/total, comfort: c/total, discretion: d/total };
+}
+
+// D1 — Score de discrétion via tags OSM
+function computeDiscretion(tags) {
+  let score = 5;
+  if (tags.covered === 'yes' || tags.covered === 'arcade') score += 2;
+  if (tags.natural === 'tree_row' || tags.natural === 'wood') score += 1;
+  if (tags.tunnel === 'yes') score += 2;
+  if (tags.bridge === 'yes') score -= 1;
+  if (tags.tourism === 'viewpoint') score -= 2;
+  if (tags.amenity === 'marketplace') score -= 1;
+  if (tags.highway === 'primary' || tags.highway === 'secondary') score -= 2;
+  if (tags.name && tags.name.toLowerCase().includes('place')) score -= 1; // grandes places
+  if (tags.access === 'private') score += 2; // coin tranquille
+  return Math.max(0, Math.min(10, score));
+}
+
+function computeComfort(tags) {
+  let score = 0;
+  if (tags.covered === 'yes' || tags.covered === 'arcade') score += 2;
+  if (tags.bench === 'yes') score += 1;
+  if (tags.shelter === 'yes') score += 1;
+  if (tags.lit === 'yes') score += 1;
+  if (['paving_stones','asphalt','concrete'].includes(tags.surface)) score += 1;
+  if (['yes','public','permissive'].includes(tags.access)) score += 1;
+  if (tags.fee === 'no') score += 1;
+  return Math.min(score, 10);
+}
+
+// B4 — Score composite pondéré
+function computeScore(candidate) {
+  const weights = getWeights();
+  const typeBase = PLACE_TYPES.find(p => p.id === candidate.type);
+  const typeScore = typeBase ? typeBase.score / 10 : 0.5;
+  const comfortScore = computeComfort(candidate.tags || {}) / 10;
+  const discretionScore = computeDiscretion(candidate.tags || {}) / 10;
+  return Math.round(
+    (weights.type * typeScore + weights.comfort * comfortScore + weights.discretion * discretionScore) * 10
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAP
+// ═══════════════════════════════════════════════════════════
+const map = L.map('map').setView([46.2, 2.3], 6);
 const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
   { attribution:'© OpenStreetMap © CARTO', maxZoom:19 });
 const satellite  = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-  { attribution:'© Esri, Maxar, Earthstar Geographics', maxZoom:19 });
-const osmStd     = L.tileLayer('https://tile.openstreetmap.bzh/br/{z}/{x}/{y}.png',
+  { attribution:'© Esri, Maxar', maxZoom:19 });
+const osmStd     = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   { attribution:'© OpenStreetMap contributors', maxZoom:19 });
-
 cartoLight.addTo(map);
 L.control.layers(
   { "🗺 Plan clair":cartoLight, "🛰 Satellite":satellite, "🗺 OSM Standard":osmStd },
@@ -310,14 +600,56 @@ L.control.layers(
 ).addTo(map);
 
 let drawnLayers = [], centerMarker = null;
-let globalLines = [];  // lignes centre→joueur par index
-
 const COLORS = ["#1a6b3c","#e07b2a","#2d6fa3","#8b3ab8","#c0392b","#1a7a6e","#7d5a00","#1a4f7a","#5a3080","#8b2020"];
 const SECTOR_COLORS = ['#1a6b3c','#2d9e5f','#34c472','#7dcfa4','#b5e8ce'];
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// E1 — STEPPER DE PROGRESSION
+// ═══════════════════════════════════════════════════════════
+const STEPS_DEF = [
+  { id:'geocode',   label:'Géocodage de l\'adresse' },
+  { id:'isochrone', label:'Zone isochrone' },
+  { id:'overpass',  label:'Recherche des lieux' },
+  { id:'filter',    label:'Filtrage géodésique' },
+  { id:'sectors',   label:'Secteurs adaptatifs' },
+  { id:'osrm',      label:'Temps de marche OSRM' },
+  { id:'select',    label:'Sélection optimale' },
+  { id:'enrich',    label:'Enrichissement des alternatives' },
+];
+
+function showStepper() {
+  const stepper = document.getElementById('progressStepper');
+  stepper.classList.add('visible');
+  const content = document.getElementById('stepperContent');
+  content.innerHTML = STEPS_DEF.map(s =>
+    `<div class="step-item pending" id="step-${s.id}">
+       <div class="step-dot" id="stepdot-${s.id}">·</div>
+       <span>${s.label}</span>
+     </div>
+     <div class="step-detail" id="stepdetail-${s.id}"></div>`
+  ).join('');
+}
+
+function setStep(id, status, detail='') {
+  const el = document.getElementById('step-'+id);
+  const dot = document.getElementById('stepdot-'+id);
+  const det = document.getElementById('stepdetail-'+id);
+  if (!el) return;
+  el.className = 'step-item ' + status;
+  if (status === 'done')    { dot.textContent = '✓'; }
+  else if (status === 'error') { dot.textContent = '✕'; }
+  else if (status === 'skip') { dot.textContent = '–'; el.className = 'step-item done'; }
+  else { dot.textContent = '·'; }
+  if (det && detail) det.textContent = detail;
+}
+
+function hideStepper() {
+  document.getElementById('progressStepper').classList.remove('visible');
+}
+
+// ═══════════════════════════════════════════════════════════
 // HELPERS
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 function setStatus(msg, type='') {
   const el = document.getElementById('status');
   el.className = 'status ' + type;
@@ -336,14 +668,14 @@ function bearing(o, p) {
 }
 
 function greedyDisperse(pool, n) {
-  if (pool.length<=n) return pool;
-  const cl={lat:pool.reduce((s,c)=>s+c.lat,0)/pool.length, lon:pool.reduce((s,c)=>s+c.lon,0)/pool.length};
-  let rem=[...pool].sort((a,b)=>haversine(b,cl)-haversine(a,cl));
-  const sel=[rem.shift()];
-  while (sel.length<n && rem.length) {
+  if (pool.length <= n) return pool;
+  const cl = {lat:pool.reduce((s,c)=>s+c.lat,0)/pool.length, lon:pool.reduce((s,c)=>s+c.lon,0)/pool.length};
+  let rem = [...pool].sort((a,b) => haversine(b,cl) - haversine(a,cl));
+  const sel = [rem.shift()];
+  while (sel.length < n && rem.length) {
     let best=null, bs=-1;
     for (const c of rem) { const d=Math.min(...sel.map(s=>haversine(c,s))); if(d>bs){bs=d;best=c;} }
-    sel.push(best); rem=rem.filter(c=>c!==best);
+    sel.push(best); rem = rem.filter(c => c !== best);
   }
   return sel;
 }
@@ -360,264 +692,620 @@ function detectBonuses(tags) {
   return b;
 }
 
-function clearMap() {
-  drawnLayers.forEach(l=>map.removeLayer(l)); drawnLayers=[];
-  if(centerMarker){map.removeLayer(centerMarker);centerMarker=null;}
+// D1 — Badge de discrétion
+function discretionBadge(score) {
+  if (score >= 7) return `<span style="color:#1a6b3c;">🫥 Discret (${score}/10)</span>`;
+  if (score >= 4) return `<span style="color:#c8970a;">👁 Modéré (${score}/10)</span>`;
+  return `<span style="color:#c0392b;">📢 Exposé (${score}/10)</span>`;
 }
 
-// ═══════════════════════════════════════════════
+function clearMap() {
+  drawnLayers.forEach(l => map.removeLayer(l)); drawnLayers=[];
+  if (centerMarker) { map.removeLayer(centerMarker); centerMarker=null; }
+}
+
+// B2 — clé cache Overpass
+function overpassCacheKey(bbox, types) {
+  return bbox + '|' + [...types].sort().join(',');
+}
+
+// ═══════════════════════════════════════════════════════════
+// D6 — GÉOLOCALISATION AUTOMATIQUE
+// ═══════════════════════════════════════════════════════════
+let _geolocatedCenter = null;
+async function geolocateMe() {
+  if (!navigator.geolocation) { setStatus('Géolocalisation non supportée','error'); return; }
+  setStatus('Localisation GPS…','running');
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const lat = pos.coords.latitude, lon = pos.coords.longitude;
+      const name = await reverseGeocode(lat, lon);
+      document.getElementById('address').value = name;
+      _geolocatedCenter = { lat, lon, display: name };
+      setStatus('Position GPS obtenue ✓','ok');
+    },
+    () => setStatus('Géolocalisation refusée','error')
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
 // API CALLS
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 async function geocode(address) {
-  const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`,{headers:{'Accept-Language':'fr'}});
-  const d=await r.json();
-  if(!d.length) throw new Error('Adresse introuvable');
-  return {lat:parseFloat(d[0].lat),lon:parseFloat(d[0].lon),display:d[0].display_name};
+  // Si on a une position GPS récente et l'adresse correspond → utiliser direct
+  if (_geolocatedCenter && document.getElementById('address').value === _geolocatedCenter.display) {
+    return _geolocatedCenter;
+  }
+  const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`,
+    { headers:{'Accept-Language':'fr'} });
+  const d = await r.json();
+  if (!d.length) throw new Error('Adresse introuvable');
+  return { lat:parseFloat(d[0].lat), lon:parseFloat(d[0].lon), display:d[0].display_name };
+}
+
+// C1 — Isochrone via Valhalla
+async function getIsochrone(center, minutes, speedKmh) {
+  const isoActive = document.getElementById('isochroneToggle').checked;
+  if (!isoActive) return null;
+
+  // Ajuster le costing selon la vitesse
+  const costing = speedKmh > 6 ? 'bicycle' : 'pedestrian';
+  const url = `https://valhalla1.openstreetmap.de/isochrone?json=` +
+    encodeURIComponent(JSON.stringify({
+      locations: [{ lat: center.lat, lon: center.lon }],
+      costing,
+      contours: [{ time: Math.round(minutes * 1.3) }],  // marge 30%
+      polygons: true
+    }));
+
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error('Valhalla HTTP ' + r.status);
+    const geojson = await r.json();
+    if (geojson.features && geojson.features[0]) {
+      return geojson.features[0].geometry;  // GeoJSON Polygon/MultiPolygon
+    }
+  } catch(e) {
+    console.warn('Isochrone Valhalla failed:', e.message);
+  }
+  return null;
+}
+
+// Test point-in-polygon avec Turf.js
+function isInIsochrone(isoGeom, lat, lon) {
+  if (!isoGeom || typeof turf === 'undefined') return true; // fallback: tout passe
+  try {
+    const pt = turf.point([lon, lat]);
+    const poly = turf.feature(isoGeom);
+    return turf.booleanPointInPolygon(pt, poly);
+  } catch(e) { return true; }
 }
 
 async function fetchCandidates(bbox) {
-  const lines=PLACE_TYPES.filter(pt=>activeTypes.has(pt.id)).map(pt=>pt.query(bbox)).join('\n  ');
-  const query=`[out:json][timeout:30];\n(\n  ${lines}\n);\nout center tags;`;
-  const servers=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
-  for(let i=0;i<servers.length*2;i++){
-    try{
-      const r=await fetch(servers[i%servers.length],{method:'POST',
+  // B2 — Cache Overpass
+  const cacheKey = overpassCacheKey(bbox, activeTypes);
+  if (D.cache.overpass.has(cacheKey)) {
+    return D.cache.overpass.get(cacheKey);
+  }
+
+  const lines = PLACE_TYPES.filter(pt=>activeTypes.has(pt.id)).map(pt=>pt.query(bbox)).join('\n  ');
+  const query = `[out:json][timeout:30];\n(\n  ${lines}\n);\nout center tags;`;
+  const servers = ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+
+  // B5 — Backoff exponentiel
+  for (let i = 0; i < servers.length * 2; i++) {
+    try {
+      const r = await fetch(servers[i % servers.length], {
+        method:'POST',
         body:'data='+encodeURIComponent(query),
-        headers:{'Content-Type':'application/x-www-form-urlencoded','User-Agent':'deploiement/1.0'}});
-      if(r.ok){const d=await r.json();return d.elements||[];}
-    }catch(e){}
-    await new Promise(res=>setTimeout(res,3000));
+        headers:{'Content-Type':'application/x-www-form-urlencoded','User-Agent':'deploiement/2.0'}
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const elements = d.elements || [];
+        D.cache.overpass.set(cacheKey, elements);
+        return elements;
+      }
+      // Lire le header Retry-After si présent
+      const retryAfter = r.headers.get('Retry-After');
+      const waitMs = retryAfter ? parseInt(retryAfter)*1000 : Math.min(1000 * Math.pow(2, i), 15000);
+      await new Promise(res => setTimeout(res, waitMs));
+    } catch(e) {
+      const waitMs = Math.min(1000 * Math.pow(2, i), 15000);
+      await new Promise(res => setTimeout(res, waitMs));
+    }
   }
   throw new Error('Overpass inaccessible — réessaie dans quelques secondes');
 }
 
 async function getWalkTimes(center, pool) {
-  const coords=[`${center.lon},${center.lat}`,...pool.map(c=>`${c.lon},${c.lat}`)].join(';');
-  const dsts=pool.map((_,i)=>i+1).join(';');
-  const r=await fetch(`https://router.project-osrm.org/table/v1/foot/${coords}?sources=0&destinations=${dsts}&annotations=duration`);
-  const d=await r.json();
-  return (d.durations&&d.durations[0])||[];
+  if (!pool.length) return [];
+  const profile = getOsrmProfile();
+  const coords = [`${center.lon},${center.lat}`,...pool.map(c=>`${c.lon},${c.lat}`)].join(';');
+  const dsts = pool.map((_,i)=>i+1).join(';');
+  const r = await fetch(`https://router.project-osrm.org/table/v1/${profile}/${coords}?sources=0&destinations=${dsts}&annotations=duration`);
+  const d = await r.json();
+  return (d.durations && d.durations[0]) || [];
 }
 
-// ═══════════════════════════════════════════════
-// MAIN
-// ═══════════════════════════════════════════════
+// D8 — Tracé d'itinéraire réel OSRM
+async function getWalkRoute(center, dest) {
+  const profile = getOsrmProfile();
+  try {
+    const url = `https://router.project-osrm.org/route/v1/${profile}/` +
+      `${center.lon},${center.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson`;
+    const r = await fetch(url);
+    const d = await r.json();
+    if (d.routes && d.routes[0]) {
+      return d.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+    }
+  } catch(e) {}
+  return [[center.lat, center.lon], [dest.lat, dest.lon]];
+}
+
+// C4 — Dénivelé via Open-Elevation
+async function getElevations(points) {
+  try {
+    const locs = points.map(p => `${p.lat},${p.lon}`).join('|');
+    const r = await fetch(`https://api.open-elevation.com/api/v1/lookup?locations=${locs}`,
+      { signal: AbortSignal.timeout(6000) });
+    const d = await r.json();
+    return d.results ? d.results.map(r => r.elevation) : points.map(() => null);
+  } catch(e) { return points.map(() => null); }
+}
+
+// Règle de Naismith : +1 min par 10m de dénivelé positif
+function adjustTimeForElevation(walkMinutes, elevCenter, elevPoint) {
+  if (elevCenter == null || elevPoint == null) return walkMinutes;
+  const gain = Math.max(0, elevPoint - elevCenter);
+  return walkMinutes + (gain / 10);
+}
+
+// REVERSE GEOCODE
+async function reverseGeocode(lat, lon) {
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=18`,
+      { headers:{'Accept-Language':'fr'} });
+    const d = await r.json();
+    const t = d.address;
+    return t.amenity || t.leisure || t.shop || t.road || t.pedestrian || t.suburb || 'Position personnalisée';
+  } catch(e) { return 'Position personnalisée'; }
+}
+
+// ═══════════════════════════════════════════════════════════
+// B3 — SECTEURS ADAPTATIFS (k-means angulaire)
+// ═══════════════════════════════════════════════════════════
+function circularMean(angles) {
+  const sinSum = angles.reduce((s,a) => s + Math.sin(a * Math.PI/180), 0);
+  const cosSum = angles.reduce((s,a) => s + Math.cos(a * Math.PI/180), 0);
+  return ((Math.atan2(sinSum, cosSum) * 180/Math.PI) + 360) % 360;
+}
+
+function angularDist(a, b) {
+  const diff = Math.abs(a - b) % 360;
+  return diff > 180 ? 360 - diff : diff;
+}
+
+function adaptiveSectors(candidates, N, iterations=10) {
+  if (!candidates.length) return Array.from({length:N}, () => []);
+
+  // Centres initiaux équidistants
+  let centers = Array.from({length:N}, (_,i) => (i * 360/N));
+
+  for (let iter = 0; iter < iterations; iter++) {
+    // Assigner chaque candidat au centre le plus proche
+    const clusters = Array.from({length:N}, () => []);
+    for (const c of candidates) {
+      const brg = c.bearing;
+      let best = 0, bestDist = angularDist(brg, centers[0]);
+      for (let k = 1; k < N; k++) {
+        const d = angularDist(brg, centers[k]);
+        if (d < bestDist) { bestDist = d; best = k; }
+      }
+      clusters[best].push(c);
+    }
+    // Recalculer les centres (moyenne circulaire)
+    const newCenters = centers.map((oldC, k) => {
+      if (!clusters[k].length) return oldC;
+      return circularMean(clusters[k].map(c => c.bearing));
+    });
+    // Vérifier convergence
+    const moved = newCenters.some((nc, k) => angularDist(nc, centers[k]) > 0.5);
+    centers = newCenters;
+    if (!moved) break;
+  }
+
+  // Assignation finale
+  const finalClusters = Array.from({length:N}, () => []);
+  for (const c of candidates) {
+    let best = 0, bestDist = angularDist(c.bearing, centers[0]);
+    for (let k = 1; k < N; k++) {
+      const d = angularDist(c.bearing, centers[k]);
+      if (d < bestDist) { bestDist = d; best = k; }
+    }
+    finalClusters[best].push(c);
+  }
+
+  // Fallback : redistribuer les clusters vides depuis le plus gros
+  for (let k = 0; k < N; k++) {
+    if (finalClusters[k].length === 0) {
+      const biggestIdx = finalClusters.reduce((bi,cl,i) => cl.length > finalClusters[bi].length ? i : bi, 0);
+      if (finalClusters[biggestIdx].length > 1) {
+        // Prendre la moitié du plus gros cluster
+        const half = Math.floor(finalClusters[biggestIdx].length / 2);
+        finalClusters[k] = finalClusters[biggestIdx].splice(0, half);
+      }
+    }
+  }
+  return finalClusters;
+}
+
+// ═══════════════════════════════════════════════════════════
+// B6 — ENRICHISSEMENT ASYNC DES ALTERNATIVES
+// ═══════════════════════════════════════════════════════════
+async function enrichAllWalkTimes(center, candidates) {
+  const BATCH_SIZE = 80;
+  for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
+    const batch = candidates.slice(i, i + BATCH_SIZE);
+    try {
+      const times = await getWalkTimes(center, batch);
+      batch.forEach((c, j) => {
+        if (times[j] != null && times[j] < 9999) {
+          c.walk_sec = times[j];
+          c.walk_min = c.walk_sec / 60;
+          c.walkTimeIsReal = true;
+        }
+      });
+    } catch(e) { /* On continue même si un batch échoue */ }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN RUN
+// ═══════════════════════════════════════════════════════════
 async function run() {
-  const address=document.getElementById('address').value.trim();
-  const N=parseInt(document.getElementById('nPlayers').value);
-  const T=parseInt(document.getElementById('tMinutes').value);
-  const K=3;
+  const address   = document.getElementById('address').value.trim();
+  const N         = parseInt(document.getElementById('nPlayers').value);
+  const T         = parseInt(document.getElementById('tMinutes').value);
+  const speedKmh  = getSpeedKmh();
+  const K         = Math.min(10, 8);  // B1 — K=8 au lieu de 3
 
-  if(!address){setStatus('Saisis une adresse.','error');return;}
-  if(activeTypes.size===0){setStatus('Sélectionne au moins un type de lieu.','error');return;}
+  if (!address)           { setStatus('Saisis une adresse.','error'); return; }
+  if (activeTypes.size === 0) { setStatus('Sélectionne au moins un type de lieu.','error'); return; }
 
-  document.getElementById('btnRun').disabled=true;
+  document.getElementById('btnRun').disabled = true;
   clearMap();
-  document.getElementById('statsSection').style.display='none';
-  document.getElementById('resultsList').innerHTML='<div class="empty-state"><div class="big">⏳</div><p>Calcul en cours…</p></div>';
+  document.getElementById('statsSection').style.display = 'none';
+  document.getElementById('resultsList').innerHTML = '<div class="empty-state"><div class="big">⏳</div><p>Calcul en cours…</p></div>';
+
+  // A4 — Nettoyer les registres globaux
+  D.altRegistry = {};
+  D.popupState  = {};
+  D.isochronePoly = null;
+
+  showStepper();
 
   try {
-    // 1 — Geocode
-    setStatus('Géocodage de l\'adresse…','running');
-    const center=await geocode(address);
+    // ── ÉTAPE 1 : GEOCODAGE ──────────────────────────────
+    setStatus('Géocodage…','running');
+    setStep('geocode','running');
+    const center = await geocode(address);
+    D.center = center;
+    D.N = N;
+    D.T = T;
+    setStep('geocode','done', center.display.substring(0,50)+'…');
 
-    centerMarker=L.marker([center.lat,center.lon],{icon:L.divIcon({className:'',
-      html:`<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid #1a6b3c;box-shadow:0 0 10px rgba(26,107,60,.4);"></div>`,
-      iconSize:[18,18],iconAnchor:[9,9]})}).addTo(map)
-      .bindPopup(`<b>Point central</b><br><small style="color:#7a9e8a;">${center.display}</small>`);
+    centerMarker = L.marker([center.lat, center.lon], {
+      icon: L.divIcon({ className:'',
+        html:`<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid #1a6b3c;box-shadow:0 0 10px rgba(26,107,60,.4);"></div>`,
+        iconSize:[18,18], iconAnchor:[9,9] })
+    }).addTo(map).bindPopup(`<b>Point central</b><br><small style="color:#7a9e8a;">${center.display}</small>`);
 
-    // 2 — Overpass
-    const T_sec=T*60, SPEED=3500/60;  // 3.5 km/h piéton
-    const rM=T*(3500/60)*1.6, dLat=rM/111320, dLon=rM/(111320*Math.cos(center.lat*Math.PI/180));  // 3.5 km/h
-    const bbox=`${center.lat-dLat},${center.lon-dLon},${center.lat+dLat},${center.lon+dLon}`;
+    // ── ÉTAPE 2 : ISOCHRONE (C1) ─────────────────────────
+    setStep('isochrone','running');
+    setStatus('Zone isochrone…','running');
+    let isoGeom = null;
+    if (document.getElementById('isochroneToggle').checked) {
+      isoGeom = await getIsochrone(center, T, speedKmh);
+      D.isochronePoly = isoGeom;
+      if (isoGeom) {
+        // Afficher l'isochrone sur la carte
+        try {
+          const isoLayer = L.geoJSON({ type:'Feature', geometry:isoGeom }, {
+            style: { color:'#1a6b3c', weight:2, opacity:0.5, fillOpacity:0.06, fillColor:'#1a6b3c', dashArray:'6 4' }
+          }).addTo(map);
+          drawnLayers.push(isoLayer);
+          document.getElementById('isoBadge').textContent = 'Valhalla ✓';
+          document.getElementById('isoBadge').className = 'iso-badge active';
+        } catch(e) {}
+        setStep('isochrone','done','Polygone isochrone chargé');
+      } else {
+        document.getElementById('isoBadge').textContent = 'bbox (fallback)';
+        document.getElementById('isoBadge').className = 'iso-badge fallback';
+        setStep('isochrone','skip','Valhalla indisponible → bbox');
+      }
+    } else {
+      setStep('isochrone','skip','Désactivé');
+      document.getElementById('isoBadge').textContent = 'Désactivé';
+      document.getElementById('isoBadge').className = 'iso-badge fallback';
+    }
 
-    setStatus(`Recherche des lieux (${activeTypes.size} types actifs)…`,'running');
-    const elements=await fetchCandidates(bbox);
+    // ── ÉTAPE 3 : OVERPASS ───────────────────────────────
+    setStep('overpass','running');
+    setStatus(`Recherche des lieux (${activeTypes.size} types)…`,'running');
 
-    // Parse
-    const candidates=[];
-    for(const el of elements){
-      const clat=el.lat??el.center?.lat, clon=el.lon??el.center?.lon;
-      if(!clat||!clon) continue;
-      const tags=el.tags||{};
-      const ptype=tags.leisure||tags.amenity||tags.highway||tags.railway||tags.tourism||tags.place||tags.shop||'other';
-      if(!activeTypes.has(ptype)||!WAIT_SCORE[ptype]) continue;
-      const bonuses=detectBonuses(tags);
-      const bonusScore=(tags.covered==='yes'?1:0)+(tags.bench==='yes'?1:0)+(tags.shelter==='yes'?1:0);
+    // A1 FIX — Calcul du bbox avec les bonnes unités
+    const speedMs    = speedKmh * 1000 / 3600;       // m/s
+    const T_sec      = T * 60;                        // secondes
+    const rBbox      = T_sec * speedMs * 1.6;         // rayon bbox = T × vitesse × marge 60%
+    const dLat       = rBbox / 111320;
+    const dLon       = rBbox / (111320 * Math.cos(center.lat * Math.PI/180));
+    const bbox       = `${center.lat-dLat},${center.lon-dLon},${center.lat+dLat},${center.lon+dLon}`;
+
+    const elements = await fetchCandidates(bbox);
+    setStep('overpass','done', `${elements.length} éléments récupérés`);
+
+    // ── ÉTAPE 4 : FILTRAGE GÉODÉSIQUE ────────────────────
+    setStep('filter','running');
+    setStatus('Filtrage et scoring…','running');
+
+    // A1 FIX — Utilisation des bonnes unités pour rMin/rMax
+    const rMin = T_sec * speedMs * 0.4;
+    const rMax = T_sec * speedMs * 1.8;
+
+    const candidates = [];
+    for (const el of elements) {
+      const clat = el.lat ?? el.center?.lat;
+      const clon = el.lon  ?? el.center?.lon;
+      if (!clat || !clon) continue;
+
+      const tags = el.tags || {};
+
+      // A2 FIX — Matching explicite des types
+      const ptype = detectType(tags);
+      if (!ptype) continue;
+
+      const distGeo = haversine(center, {lat:clat, lon:clon});
+      if (distGeo < rMin || distGeo > rMax) continue;
+
+      // C1 — Filtre isochrone si disponible
+      if (isoGeom && !isInIsochrone(isoGeom, clat, clon)) continue;
+
+      const bonuses  = detectBonuses(tags);
+      const brg      = bearing(center, {lat:clat, lon:clon});
+
+      // B4 — Score composite pondéré
+      const pseudoCand = { type:ptype, tags, lat:clat, lon:clon };
+      const compScore  = computeScore(pseudoCand);
+      const discretion = computeDiscretion(tags);
+
       candidates.push({
-        lat:clat, lon:clon,
-        name:tags.name||tags['name:fr']||ptype,
-        type:ptype,
-        wait_score:WAIT_SCORE[ptype]+bonusScore,
+        lat: clat, lon: clon,
+        name: tags.name || tags['name:fr'] || ptype,
+        type: ptype,
+        wait_score:  compScore,
+        discretion_score: discretion,
         tags, bonuses,
-        dist_geo:haversine(center,{lat:clat,lon:clon}),
-        bearing:bearing(center,{lat:clat,lon:clon})
+        dist_geo: distGeo,
+        bearing:  brg,
+        // C3 — Temps estimé avec facteur de correction
+        walk_sec: estimateWalkSec(distGeo, speedKmh),
+        walk_min: estimateWalkSec(distGeo, speedKmh) / 60,
+        walkTimeIsReal: false,
       });
     }
-    if(candidates.length<N) throw new Error(`Seulement ${candidates.length} lieux trouvés pour ${N} joueurs. Élargis la sélection ou augmente le temps.`);
 
-    // 3 — Pré-filtre géo
-    const rMin=T_sec*SPEED*0.5, rMax=T_sec*SPEED*1.6;
-    let geoFiltered=candidates.filter(c=>c.dist_geo>=rMin&&c.dist_geo<=rMax);
-    if(geoFiltered.length<N)
-      geoFiltered=[...candidates].sort((a,b)=>Math.abs(a.dist_geo-T_sec*SPEED)-Math.abs(b.dist_geo-T_sec*SPEED)).slice(0,Math.max(N*6,30));
-
-    // 4 — Secteurs
-    const sectorSize=360/N;
-    const sectors=Array.from({length:N},()=>[]);
-    for(const c of geoFiltered) sectors[Math.floor(c.bearing/sectorSize)%N].push(c);
-
-    // 5 — Top K par secteur
-    const prePool=[], emptySectors=[];
-    for(let i=0;i<N;i++){
-      if(!sectors[i].length){emptySectors.push(i);continue;}
-      const sorted=[...sectors[i]].sort((a,b)=>b.wait_score-a.wait_score||(Math.abs(a.dist_geo-T_sec*SPEED)-Math.abs(b.dist_geo-T_sec*SPEED)));
-      prePool.push(...sorted.slice(0,K));
+    if (candidates.length < N) {
+      throw new Error(`Seulement ${candidates.length} lieux trouvés pour ${N} joueurs. Élargis la sélection ou augmente le temps.`);
     }
-    if(!prePool.length) throw new Error('Aucun candidat dans les secteurs.');
+    setStep('filter','done', `${candidates.length} candidats valides`);
+    D.geoFiltered = candidates;
 
-    // 6 — OSRM
-    setStatus(`Calcul temps de marche (${prePool.length} lieux)…`,'running');
-    const walkTimes=await getWalkTimes(center,prePool);
-    prePool.forEach((c,i)=>{c.walk_sec=walkTimes[i]??9999;c.walk_min=c.walk_sec/60;});
+    // ── ÉTAPE 5 : SECTEURS ADAPTATIFS (B3) ───────────────
+    setStep('sectors','running');
+    setStatus('Secteurs adaptatifs…','running');
+    const sectors = adaptiveSectors(candidates, N);
+    setStep('sectors','done', `${N} secteurs calculés`);
 
-    // 7 — Sélection 1 par secteur
-    const margin=Math.max(90,T_sec*0.2);
-    const selected=[];
-    const finalEmpty=[...emptySectors];
+    // ── ÉTAPE 6 : OSRM TABLE ─────────────────────────────
+    setStep('osrm','running');
 
-    for(let i=0;i<N;i++){
-      if(!sectors[i].length) continue;
-      const sTimed=sectors[i].filter(c=>prePool.includes(c));
-      const valid=sTimed.filter(c=>c.walk_sec<9999);
-      if(!valid.length){finalEmpty.push(i);continue;}
-      const inMargin=valid.filter(c=>Math.abs(c.walk_sec-T_sec)<=margin);
-      const pool=inMargin.length?inMargin:valid;
-      pool.sort((a,b)=>Math.abs(a.walk_sec-T_sec)-Math.abs(b.walk_sec-T_sec)||b.wait_score-a.wait_score);
+    // B1 — K=8, top K par secteur
+    const prePool = [];
+    for (let i = 0; i < N; i++) {
+      if (!sectors[i].length) continue;
+      const sorted = [...sectors[i]].sort((a,b) =>
+        b.wait_score - a.wait_score ||
+        (Math.abs(a.walk_sec - T_sec) - Math.abs(b.walk_sec - T_sec))
+      );
+      prePool.push(...sorted.slice(0, K));
+    }
+
+    setStatus(`Calcul OSRM (${prePool.length} lieux)…`,'running');
+    const walkTimes = await getWalkTimes(center, prePool);
+    prePool.forEach((c, i) => {
+      if (walkTimes[i] != null && walkTimes[i] < 9999) {
+        c.walk_sec = walkTimes[i];
+        c.walk_min = c.walk_sec / 60;
+        c.walkTimeIsReal = true;
+      }
+    });
+    D.prePool = prePool;
+    setStep('osrm','done', `${prePool.length} temps calculés`);
+
+    // ── ÉTAPE 7 : SÉLECTION FINALE ───────────────────────
+    setStep('select','running');
+    setStatus('Sélection optimale…','running');
+
+    const margin   = Math.max(90, T_sec * 0.2);
+    const selected = [];
+
+    for (let i = 0; i < N; i++) {
+      if (!sectors[i].length) continue;
+      const sTimed = sectors[i].filter(c => prePool.includes(c));
+      const valid  = sTimed.filter(c => c.walk_sec < 9999);
+      if (!valid.length) continue;
+
+      const inMargin = valid.filter(c => Math.abs(c.walk_sec - T_sec) <= margin);
+      const pool     = inMargin.length ? inMargin : valid;
+      pool.sort((a,b) => Math.abs(a.walk_sec-T_sec)-Math.abs(b.walk_sec-T_sec) || b.wait_score-a.wait_score);
       selected.push(pool[0]);
     }
 
-    // Fallback greedy
-    if(finalEmpty.length&&selected.length<N){
-      const already=new Set(selected);
-      const rem=prePool.filter(c=>!already.has(c)&&c.walk_sec<9999)
-        .sort((a,b)=>Math.abs(a.walk_sec-T_sec)-Math.abs(b.walk_sec-T_sec));
-      selected.push(...greedyDisperse(rem,N-selected.length));
+    // Fallback greedy si nécessaire
+    if (selected.length < N) {
+      const already = new Set(selected);
+      const rem = prePool.filter(c => !already.has(c) && c.walk_sec < 9999)
+        .sort((a,b) => Math.abs(a.walk_sec-T_sec) - Math.abs(b.walk_sec-T_sec));
+      selected.push(...greedyDisperse(rem, N - selected.length));
     }
-    if(!selected.length) throw new Error('Aucun résultat. Essaie d\'autres types de lieux.');
 
-    // Store globals for swap/drag/export
-    globalSelected    = selected;
-    globalPrePool     = prePool;
-    globalGeoFiltered = geoFiltered;  // tous les candidats — alternatives infinies
-    globalCenter      = center;
-    globalN           = N;
-    globalT           = T;
+    if (!selected.length) throw new Error('Aucun résultat. Essaie d\'autres types de lieux.');
+    setStep('select','done', `${selected.length} positions sélectionnées`);
 
-    // Build sector->candidates map for alternatives
+    D.selected = selected;
+
+    // ── ÉTAPE 8 : C4 DÉNIVELÉ ────────────────────────────
+    let centerElev = null;
+    try {
+      const elevs = await getElevations([center, ...selected]);
+      centerElev = elevs[0];
+      selected.forEach((p, i) => {
+        p.elevation = elevs[i+1];
+        if (centerElev != null && p.elevation != null) {
+          const adjusted = adjustTimeForElevation(p.walk_min, centerElev, p.elevation);
+          p.walk_min_adj = adjusted;
+          p.elev_gain    = Math.max(0, p.elevation - centerElev);
+        }
+      });
+    } catch(e) { /* Dénivelé optionnel */ }
+
+    // ── ÉTAPE 9 : D8 ITINÉRAIRES RÉELS (async) ───────────
+    setStep('enrich','running');
+    setStatus('Tracé des itinéraires…','running');
+
+    // Construire la sectorMap pour les alternatives
     const sectorMap = Array.from({length:N}, (_,i) =>
-      prePool.filter(c => Math.floor(c.bearing/sectorSize)%N === i)
+      prePool.filter(c => {
+        const sectors2 = adaptiveSectors([c], N);
+        return false; // on utilisera getSectorAlternatives directement
+      })
     );
 
-    renderResults(selected, center, N, T, T_sec, sectorMap);
+    renderResults(selected, center, N, T, T_sec);
 
-  } catch(e) { setStatus('Erreur : '+e.message,'error'); console.error(e); }
-  document.getElementById('btnRun').disabled=false;
+    // D8 — Remplacer les lignes droites par les itinéraires réels en arrière-plan
+    for (let i = 0; i < selected.length; i++) {
+      (async (idx) => {
+        const routeCoords = await getWalkRoute(center, selected[idx]);
+        if (D.lines[idx]) {
+          D.lines[idx].setLatLngs(routeCoords);
+          D.lines[idx].setStyle({ dashArray: null, opacity: 0.4, weight: 2.5, color: COLORS[idx % COLORS.length] });
+        }
+      })(i);
+    }
+
+    // B6 — Enrichir les temps de marche des alternatives en arrière-plan
+    enrichAllWalkTimes(center, D.geoFiltered.filter(c => !D.selected.includes(c))).then(() => {
+      setStep('enrich','done','Alternatives enrichies ✓');
+      setStatus(`${selected.length} positions trouvées ✓`, 'ok');
+    });
+
+  } catch(e) {
+    setStatus('Erreur : '+e.message,'error');
+    setStep('select','error', e.message);
+    console.error(e);
+  }
+  document.getElementById('btnRun').disabled = false;
 }
 
-// ═══════════════════════════════════════════════
-// RENDER
-// ═══════════════════════════════════════════════
-function renderResults(selected,center,N,T,T_sec,sectorMap){
-  globalMarkers = [];
-  globalLines   = [];
-  const wm=selected.map(p=>p.walk_min);
-  const mean=wm.reduce((a,b)=>a+b,0)/wm.length;
-  const std=Math.sqrt(wm.map(t=>(t-mean)**2).reduce((a,b)=>a+b,0)/wm.length);
-  const dists=[];
-  for(let i=0;i<selected.length;i++) for(let j=i+1;j<selected.length;j++) dists.push(haversine(selected[i],selected[j]));
+// ═══════════════════════════════════════════════════════════
+// RENDER RESULTS
+// ═══════════════════════════════════════════════════════════
+function renderResults(selected, center, N, T, T_sec) {
+  D.markers = [];
+  D.lines   = [];
+
+  const wm   = selected.map(p => p.walk_min_adj || p.walk_min);
+  const mean = wm.reduce((a,b) => a+b, 0) / wm.length;
+  const std  = Math.sqrt(wm.map(t => (t-mean)**2).reduce((a,b) => a+b, 0) / wm.length);
+  const dists = [];
+  for (let i=0; i<selected.length; i++)
+    for (let j=i+1; j<selected.length; j++)
+      dists.push(haversine(selected[i], selected[j]));
 
   // Stats
-  document.getElementById('statsSection').style.display='';
-  document.getElementById('statsContent').innerHTML=`
+  document.getElementById('statsSection').style.display = '';
+  document.getElementById('statsContent').innerHTML = `
     <div class="stat-row"><span>Temps moyen</span><b>${mean.toFixed(1)} min</b></div>
     <div class="stat-row"><span>Écart-type</span><b>${std.toFixed(2)} min</b></div>
     <div class="stat-row"><span>Min / Max</span><b>${Math.min(...wm).toFixed(1)} / ${Math.max(...wm).toFixed(1)} min</b></div>
-    <div class="stat-row"><span>Distance min entre joueurs</span><b>${Math.round(Math.min(...dists))} m</b></div>
-    <div class="stat-row"><span>Distance max entre joueurs</span><b>${Math.round(Math.max(...dists))} m</b></div>
-    <div style="margin-top:10px;">
-      <button onclick="exportCSV()" style="width:100%;padding:8px;border:1px solid #1a6b3c;
-        background:#e8f5ee;color:#1a6b3c;font-family:'DM Sans',sans-serif;font-size:.78rem;
-        font-weight:600;cursor:pointer;border-radius:2px;letter-spacing:.04em;transition:all .15s;"
+    <div class="stat-row"><span>Distance min inter-joueurs</span><b>${Math.round(Math.min(...dists))} m</b></div>
+    <div class="stat-row"><span>Distance max inter-joueurs</span><b>${Math.round(Math.max(...dists))} m</b></div>
+    <div style="margin-top:10px; display:flex; gap:6px;">
+      <button onclick="exportCSV()" style="flex:1;padding:7px;border:1px solid #1a6b3c;
+        background:#e8f5ee;color:#1a6b3c;font-family:'DM Sans',sans-serif;font-size:.75rem;
+        font-weight:600;cursor:pointer;border-radius:2px;letter-spacing:.04em;"
         onmouseover="this.style.background='#1a6b3c';this.style.color='#fff';"
         onmouseout="this.style.background='#e8f5ee';this.style.color='#1a6b3c';">
-        ↓ Exporter en CSV
+        ↓ CSV
+      </button>
+      <button onclick="exportGPX()" style="flex:1;padding:7px;border:1px solid #2d6fa3;
+        background:#e8f0fa;color:#2d6fa3;font-family:'DM Sans',sans-serif;font-size:.75rem;
+        font-weight:600;cursor:pointer;border-radius:2px;"
+        onmouseover="this.style.background='#2d6fa3';this.style.color='#fff';"
+        onmouseout="this.style.background='#e8f0fa';this.style.color='#2d6fa3';">
+        ↓ GPX
       </button>
     </div>`;
 
-  // Secteurs sur la carte
-  const refR=T*(3500/60), sectorSize=360/N;  // 3.5 km/h
-  for(let i=0;i<N;i++){
-    const a0=(i*360/N-90)*Math.PI/180, a1=((i+1)*360/N-90)*Math.PI/180;
-    const pts=[[center.lat,center.lon]];
-    for(let s=0;s<=20;s++){
-      const a=a0+(a1-a0)*s/20;
+  // Secteurs sur la carte (visuels)
+  const refR = T * (getSpeedKmh() * 1000 / 60);
+  for (let i=0; i<N; i++) {
+    const a0 = (i*360/N-90)*Math.PI/180, a1=((i+1)*360/N-90)*Math.PI/180;
+    const pts = [[center.lat, center.lon]];
+    for (let s=0; s<=20; s++) {
+      const a = a0 + (a1-a0)*s/20;
       pts.push([center.lat+refR*Math.cos(a)/111320, center.lon+refR*Math.sin(a)/(111320*Math.cos(center.lat*Math.PI/180))]);
     }
-    pts.push([center.lat,center.lon]);
-    drawnLayers.push(L.polygon(pts,{color:SECTOR_COLORS[i%SECTOR_COLORS.length],weight:1,opacity:0.3,fillOpacity:0.04}).addTo(map));
+    pts.push([center.lat, center.lon]);
+    drawnLayers.push(L.polygon(pts,{color:SECTOR_COLORS[i%SECTOR_COLORS.length],weight:1,opacity:0.25,fillOpacity:0.03}).addTo(map));
   }
 
-  // Liste + marqueurs
-  const list=document.getElementById('resultsList');
-  list.innerHTML='';
+  const list = document.getElementById('resultsList');
+  list.innerHTML = '';
 
-  selected.forEach((p,i)=>{
-    const color=COLORS[i%COLORS.length];
-    const ptDef=PLACE_TYPES.find(pt=>pt.id===p.type);
-    const icon=ptDef?ptDef.icon:'📍';
-    const stars='★'.repeat(Math.min(p.wait_score,10))+'☆'.repeat(Math.max(0,10-p.wait_score));
+  selected.forEach((p, i) => {
+    const color   = COLORS[i % COLORS.length];
+    const ptDef   = PLACE_TYPES.find(pt => pt.id === p.type);
+    const icon    = ptDef ? ptDef.icon : '📍';
+    const stars   = '★'.repeat(Math.min(p.wait_score,10)) + '☆'.repeat(Math.max(0,10-p.wait_score));
+    const walkMin = p.walk_min_adj || p.walk_min;
+    const timeLabel = p.walkTimeIsReal
+      ? `<span class="time-real">⏱ ${walkMin.toFixed(1)} min</span>`
+      : `<span class="time-est">⏱ ~${walkMin.toFixed(1)} min</span>`;
 
-    // Popup
-    const bonusItems=p.bonuses.map(b=>`<div style="padding:3px 0;border-bottom:1px solid #eee;font-size:12px;">${b}</div>`).join('');
-    const bonusSection=p.bonuses.length?`
-      <div style="margin-top:8px;padding-top:6px;border-top:2px solid #1a6b3c;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#7a9e8a;margin-bottom:4px;">Points bonus</div>
-        ${bonusItems}
-      </div>`:'';
-    const popup=`<div style="min-width:190px;font-family:'DM Sans',sans-serif;">
-      <div style="font-weight:700;font-size:14px;color:#1a2e24;margin-bottom:3px;">
-        <span style="display:inline-block;width:20px;height:20px;border-radius:3px;background:${color};color:#fff;text-align:center;line-height:20px;font-size:11px;margin-right:5px;">${i+1}</span>${p.name}
-      </div>
-      <div style="color:#7a9e8a;font-size:12px;">${icon} ${p.type}</div>
-      <div style="margin-top:6px;font-size:13px;">⏱ <b>${p.walk_min.toFixed(1)} min</b> à pied</div>
-      <div style="color:#1a6b3c;font-size:12px;margin-top:2px;">${stars} <b>${p.wait_score}/10</b></div>
-      ${bonusSection}
-      <div style="margin-top:6px;font-size:10px;color:#aaa;font-family:monospace;">${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div>
-    </div>`;
+    const elevHtml = p.elev_gain > 0
+      ? `<div style="font-size:.63rem;color:#c8970a;margin-top:2px;">↗ +${Math.round(p.elev_gain)}m (≈ +${(p.elev_gain/10).toFixed(1)} min)</div>`
+      : '';
 
-    // Sector candidates for alternatives
-    const playerBearing = p.bearing ?? bearing(center, p);
-    const playerSector  = sectorMap ? Math.floor(playerBearing/(360/N))%N : -1;
-    const sectorCands   = sectorMap ? (sectorMap[playerSector]||[]) : [];
+    const popup = buildAlternativesPopup(i, p, color);
 
-    // Build popup with alternatives
-    const popupContent = buildAlternativesPopup(i, p, sectorCands, null, color);
+    // Ligne initiale (sera remplacée par itinéraire réel via D8)
+    const line = L.polyline([[center.lat,center.lon],[p.lat,p.lon]], {
+      color: COLORS[i%COLORS.length], opacity:0.2, weight:1.5, dashArray:'5 7'
+    }).addTo(map);
 
-    // Draggable marker
+    // Marqueur draggable (A3 fix — pas de paramètre marker inutile)
     const marker = L.marker([p.lat, p.lon], {
       draggable: true,
       icon: L.divIcon({ className:'',
         html:`<div style="width:30px;height:30px;border-radius:5px;background:${color};color:#fff;
               display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;
               font-weight:700;font-size:13px;border:2px solid rgba(0,0,0,.12);
-              box-shadow:0 2px 8px rgba(0,0,0,.2);cursor:grab;" title="Glisser pour déplacer">${i+1}</div>`,
+              box-shadow:0 2px 8px rgba(0,0,0,.2);cursor:grab;">${i+1}</div>`,
         iconSize:[30,30], iconAnchor:[15,15] })
-    }).addTo(map).bindPopup(popupContent, {maxWidth:260});
-
-    // Live line update while dragging
-    const lineCoords = [[center.lat,center.lon],[p.lat,p.lon]];
-    const line = L.polyline(lineCoords, {color:'#1a6b3c',opacity:0.22,weight:1.5,dashArray:'5 7'}).addTo(map);
+    }).addTo(map).bindPopup(popup, {maxWidth:270});
 
     marker.on('drag', e => {
       const ll = e.target.getLatLng();
@@ -626,35 +1314,32 @@ function renderResults(selected,center,N,T,T_sec,sectorMap){
 
     marker.on('dragend', async e => {
       const ll = e.target.getLatLng();
-      // Reverse geocode
       const newName = await reverseGeocode(ll.lat, ll.lng);
-      // Recalculate walk time via OSRM
-      let walkMin = p.walk_min;
+      let walkM = p.walk_min;
       try {
-        const url = `https://router.project-osrm.org/route/v1/foot/${center.lon},${center.lat};${ll.lng},${ll.lat}?overview=false`;
+        const url = `https://router.project-osrm.org/route/v1/${getOsrmProfile()}/${center.lon},${center.lat};${ll.lng},${ll.lat}?overview=false`;
         const rd  = await (await fetch(url)).json();
-        if (rd.routes && rd.routes[0]) walkMin = rd.routes[0].duration / 60;
+        if (rd.routes && rd.routes[0]) walkM = rd.routes[0].duration / 60;
       } catch(err) {}
-      // Update candidate
-      globalSelected[i] = { ...globalSelected[i], lat:ll.lat, lon:ll.lng, name:newName,
-        walk_min:walkMin, walk_sec:walkMin*60, bonuses:[], wait_score:5, type:'custom', tags:{} };
-      // Update popup
-      const updatedPopup = buildAlternativesPopup(i, globalSelected[i], [], null, color);
-      marker.setPopupContent(updatedPopup);
+      D.selected[i] = { ...D.selected[i], lat:ll.lat, lon:ll.lng, name:newName,
+        walk_min:walkM, walk_sec:walkM*60, walk_min_adj:null, bonuses:[], wait_score:5,
+        type:'custom', tags:{}, walkTimeIsReal:true, discretion_score:5 };
+      const updPop = buildAlternativesPopup(i, D.selected[i], color);
+      marker.setPopupContent(updPop);
       marker.openPopup();
-      // Update list item
       const nameEl = document.getElementById('result-name-'+i);
       const metaEl = document.getElementById('result-meta-'+i);
       if (nameEl) nameEl.textContent = newName;
-      if (metaEl) metaEl.innerHTML = `<span>📍 déplacé manuellement</span><span>⏱ ${walkMin.toFixed(1)} min</span>`;
-      line.setLatLngs([[center.lat,center.lon],[ll.lat,ll.lng]]);
+      if (metaEl) metaEl.innerHTML = `<span>📍 déplacé</span><span class="time-real">⏱ ${walkM.toFixed(1)} min</span>`;
+      // D8 — Retrace la route
+      getWalkRoute(center, D.selected[i]).then(coords => line.setLatLngs(coords));
     });
 
     drawnLayers.push(marker, line);
-    globalMarkers[i] = marker;
-    globalLines[i]   = line;
+    D.markers[i] = marker;
+    D.lines[i]   = line;
 
-    // List item
+    // Highlight au survol (E4)
     const item = document.createElement('div');
     item.className = 'result-item';
     item.innerHTML = `
@@ -662,14 +1347,25 @@ function renderResults(selected,center,N,T,T_sec,sectorMap){
       <div class="result-info">
         <div class="result-name" id="result-name-${i}">${p.name}</div>
         <div class="result-meta" id="result-meta-${i}">
-          <span>${icon} ${p.type}</span><span>⏱ ${p.walk_min.toFixed(1)} min</span>
+          <span>${icon} ${p.type}</span>${timeLabel}
         </div>
         <div class="result-stars">${stars} ${p.wait_score}/10</div>
-        ${p.bonuses.length?`<div class="result-bonus">${p.bonuses.join(' · ')}</div>`:''}
+        ${elevHtml}
+        <div class="result-discretion">${discretionBadge(p.discretion_score)}</div>
+        ${p.bonuses.length ? `<div class="result-bonus">${p.bonuses.join(' · ')}</div>` : ''}
         <div style="font-size:.62rem;color:#aaa;margin-top:3px;font-family:'DM Mono',monospace;">
-          ↔ glisser sur la carte pour déplacer
+          ↔ glisser sur la carte · cliquer pour zoomer
         </div>
       </div>`;
+
+    item.addEventListener('mouseenter', () => {
+      const el = D.markers[i]?.getElement();
+      if (el) el.classList.add('marker-highlight');
+    });
+    item.addEventListener('mouseleave', () => {
+      const el = D.markers[i]?.getElement();
+      if (el) el.classList.remove('marker-highlight');
+    });
     item.onclick = () => { map.setView([p.lat,p.lon],17); marker.openPopup(); };
     list.appendChild(item);
   });
@@ -678,69 +1374,43 @@ function renderResults(selected,center,N,T,T_sec,sectorMap){
   setStatus(`${selected.length} positions trouvées ✓`,'ok');
 }
 
-document.getElementById('address').addEventListener('keydown',e=>{if(e.key==='Enter')run();});
+document.getElementById('address').addEventListener('keydown', e => { if(e.key==='Enter') run(); });
 
-// ═══════════════════════════════════════════════
-// GLOBAL STATE for alternatives + drag + export
-// ═══════════════════════════════════════════════
-let globalSelected    = [];
-let globalPrePool     = [];
-let globalGeoFiltered = [];  // tous les candidats filtrés géo — base des alternatives infinies
-let globalCenter      = null;
-let globalN           = 5;
-let globalT           = 10;
-let globalMarkers     = [];  // référence aux markers Leaflet par index joueur
-
-// ═══════════════════════════════════════════════
-// REVERSE GEOCODE
-// ═══════════════════════════════════════════════
-async function reverseGeocode(lat, lon) {
-  try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=18`,
-      { headers: {'Accept-Language':'fr'} });
-    const d = await r.json();
-    const t = d.address;
-    return t.amenity || t.leisure || t.shop || t.road || t.pedestrian || t.suburb || 'Position personnalisée';
-  } catch(e) { return 'Position personnalisée'; }
-}
-
-// ═══════════════════════════════════════════════
-// ALTERNATIVES POPUP — infinies depuis geoFiltered
-// ═══════════════════════════════════════════════
-
-// Récupère toutes les alternatives d'un secteur pour un candidat donné
-// Source : globalGeoFiltered (tous candidats géo-filtrés) + walk_sec si calculé
+// ═══════════════════════════════════════════════════════════
+// ALTERNATIVES — depuis geoFiltered (B6 fix)
+// ═══════════════════════════════════════════════════════════
 function getSectorAlternatives(playerIdx, currentCandidate) {
-  const sectorSize = 360 / globalN;
-  const T_sec = globalT * 60;
-  // Secteur du candidat actuel
-  const brg = currentCandidate.bearing ?? bearing(globalCenter, currentCandidate);
-  const sectorIdx = Math.floor(brg / sectorSize) % globalN;
+  const T_sec = D.T * 60;
+  const speedMs = getSpeedKmh() * 1000 / 3600;
+  const brg = currentCandidate.bearing ?? bearing(D.center, currentCandidate);
 
-  // Tous les candidats du même secteur dans geoFiltered, sauf le courant
-  return globalGeoFiltered
+  // Trouver les voisins angulaires (±45°)
+  return D.geoFiltered
     .filter(c => {
       if (c === currentCandidate) return false;
-      const cBrg = c.bearing ?? bearing(globalCenter, c);
-      return Math.floor(cBrg / sectorSize) % globalN === sectorIdx;
+      const cBrg = c.bearing ?? bearing(D.center, c);
+      return angularDist(cBrg, brg) < 45;
     })
     .map(c => ({
       ...c,
-      // Utiliser walk_sec si déjà calculé par OSRM, sinon estimer
-      walk_sec: c.walk_sec ?? (c.dist_geo / (3500/60)),  // 3.5 km/h
-      walk_min: c.walk_min ?? (c.dist_geo / (3500/60) / 60),  // 3.5 km/h
+      walk_sec: c.walk_sec ?? estimateWalkSec(c.dist_geo, getSpeedKmh()),
+      walk_min: c.walk_min ?? (estimateWalkSec(c.dist_geo, getSpeedKmh()) / 60),
     }))
     .sort((a,b) => Math.abs(a.walk_sec - T_sec) - Math.abs(b.walk_sec - T_sec));
 }
 
-function buildAlternativesPopup(playerIdx, currentCandidate, _unused, marker, color) {
+// A3 FIX — buildAlternativesPopup sans paramètre _unused, pas de 6ème arg
+function buildAlternativesPopup(playerIdx, currentCandidate, color) {
   const MAX_ALTS = 5;
   const alts     = getSectorAlternatives(playerIdx, currentCandidate).slice(0, MAX_ALTS);
-  const totalAlts = alts.length;
 
   const ptDef = PLACE_TYPES.find(pt => pt.id === currentCandidate.type);
   const icon  = ptDef ? ptDef.icon : (currentCandidate.type === 'custom' ? '📍' : '📍');
   const stars = '★'.repeat(Math.min(currentCandidate.wait_score,10)) + '☆'.repeat(Math.max(0,10-currentCandidate.wait_score));
+  const walkMin = currentCandidate.walk_min_adj || currentCandidate.walk_min || 0;
+  const timeStr = currentCandidate.walkTimeIsReal
+    ? `${walkMin.toFixed(1)} min`
+    : `~${walkMin.toFixed(1)} min <span style="font-size:9px;color:#aaa">(estimé)</span>`;
 
   const bonusItems = (currentCandidate.bonuses||[]).map(b =>
     `<div style="padding:2px 0;border-bottom:1px solid #f0f0f0;font-size:11px;">${b}</div>`).join('');
@@ -750,53 +1420,67 @@ function buildAlternativesPopup(playerIdx, currentCandidate, _unused, marker, co
       ${bonusItems}
     </div>` : '';
 
-  // Enregistrer le candidat courant dans un index global accessible depuis onclick inline
-  if (!window._popupState) window._popupState = {};
+  const discScore = currentCandidate.discretion_score ?? computeDiscretion(currentCandidate.tags || {});
+  const elevHtml  = (currentCandidate.elev_gain > 0)
+    ? `<div style="font-size:10px;color:#c8970a;margin-top:3px;">↗ +${Math.round(currentCandidate.elev_gain)}m (≈+${(currentCandidate.elev_gain/10).toFixed(1)}min)</div>`
+    : '';
+
+  // Street View link (D7)
+  const svLink = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${currentCandidate.lat},${currentCandidate.lon}`;
+
+  // A4 FIX — Stocker dans D.popupState et D.altRegistry
   const stateKey = `p${playerIdx}`;
-  window._popupState[stateKey] = { playerIdx, color, currentCandidate };
+  D.popupState[stateKey] = { playerIdx, color, currentCandidate };
 
   let altsHtml = '';
   if (alts.length) {
-    const altItems = alts.map((alt) => {
-      const altDef  = PLACE_TYPES.find(pt=>pt.id===alt.type);
-      const altIcon = altDef ? altDef.icon : '📍';
+    const altItems = alts.map(alt => {
+      const altDef   = PLACE_TYPES.find(pt => pt.id === alt.type);
+      const altIcon  = altDef ? altDef.icon : '📍';
       const altStars = '★'.repeat(Math.min(alt.wait_score,10));
-      // Stocker l'alt dans window pour accès inline
-      const altKey = `alt_${playerIdx}_${globalGeoFiltered.indexOf(alt)}`;
-      window[altKey] = alt;
+      const altKey   = `alt_${playerIdx}_${D.geoFiltered.indexOf(alt)}`;
+      // A4 FIX — Stocker dans D.altRegistry
+      D.altRegistry[altKey] = alt;
+      const timeNote = alt.walkTimeIsReal ? alt.walk_min.toFixed(1) : `~${alt.walk_min.toFixed(1)}`;
       return `<div onclick="swapCandidateFull(${playerIdx}, '${altKey}', '${stateKey}')"
         style="padding:6px 8px;border:1px solid #dde8e2;border-radius:3px;cursor:pointer;
                margin-bottom:4px;background:#fff;transition:background .12s;"
         onmouseover="this.style.background='#e8f5ee'" onmouseout="this.style.background='#fff'">
         <div style="font-size:11px;font-weight:600;color:#1a2e24;">${altIcon} ${alt.name}</div>
         <div style="font-size:10px;color:#7a9e8a;margin-top:1px;">
-          ⏱ ${alt.walk_min.toFixed(1)} min · ${altStars} ${alt.wait_score}/10
+          ⏱ ${timeNote} min · ${altStars} ${alt.wait_score}/10
         </div>
       </div>`;
     }).join('');
-
     altsHtml = `
       <div style="margin-top:8px;padding-top:6px;border-top:1.5px solid #dde8e2;">
         <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#7a9e8a;margin-bottom:5px;">
-          Top ${totalAlts} alternative${totalAlts>1?'s':''} du secteur
+          Alternatives du secteur
         </div>
         ${altItems}
       </div>`;
   } else {
     altsHtml = `<div style="margin-top:8px;font-size:10px;color:#aaa;font-style:italic;">
-      Aucune autre alternative dans ce secteur.</div>`;
+      Aucune alternative dans ce secteur.</div>`;
   }
 
-  return `<div style="min-width:210px;max-height:420px;overflow-y:auto;font-family:'DM Sans',sans-serif;">
+  return `<div style="min-width:220px;max-height:440px;overflow-y:auto;font-family:'DM Sans',sans-serif;">
     <div style="font-weight:700;font-size:13px;color:#1a2e24;margin-bottom:3px;">
       <span style="display:inline-block;width:18px;height:18px;border-radius:3px;background:${color};
             color:#fff;text-align:center;line-height:18px;font-size:10px;margin-right:4px;">${playerIdx+1}</span>
       ${currentCandidate.name}
     </div>
     <div style="color:#7a9e8a;font-size:11px;">${icon} ${currentCandidate.type}</div>
-    <div style="margin-top:5px;font-size:12px;">⏱ <b>${currentCandidate.walk_min.toFixed(1)} min</b> à pied</div>
+    <div style="margin-top:5px;font-size:12px;">⏱ <b>${timeStr}</b> à pied</div>
     <div style="color:#1a6b3c;font-size:11px;margin-top:2px;">${stars} <b>${currentCandidate.wait_score}/10</b></div>
+    <div style="font-size:10px;margin-top:2px;">${discretionBadge(discScore)}</div>
+    ${elevHtml}
     ${bonusSection}
+    <a href="${svLink}" target="_blank"
+       style="display:block;margin-top:8px;padding:5px 8px;background:#e8f5ee;color:#1a6b3c;
+              text-decoration:none;text-align:center;font-size:11px;font-weight:600;border-radius:3px;">
+      👁 Voir sur place (Street View)
+    </a>
     ${altsHtml}
     <div style="margin-top:6px;font-size:9px;color:#bbb;font-family:monospace;">
       ${currentCandidate.lat.toFixed(5)}, ${currentCandidate.lon.toFixed(5)}
@@ -804,78 +1488,93 @@ function buildAlternativesPopup(playerIdx, currentCandidate, _unused, marker, co
   </div>`;
 }
 
-// changePage removed — no pagination, top 5 only
-
-// ═══════════════════════════════════════════════
-// SWAP CANDIDATE — infini, avec fetch OSRM si besoin
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// A3 FIX — SWAP avec D.altRegistry (plus de window[key])
+// ═══════════════════════════════════════════════════════════
 async function swapCandidateFull(playerIdx, altKey, stateKey) {
-  const newC = window[altKey];
+  // A4 FIX — Lecture depuis D.altRegistry
+  const newC = D.altRegistry[altKey];
   if (!newC) return;
 
-  // Calculer walk_sec si pas encore fait via OSRM
-  if (!newC.walk_sec || newC.walk_sec === 9999) {
+  // Calculer walk_sec OSRM si pas encore fait
+  if (!newC.walkTimeIsReal) {
     try {
-      const url = `https://router.project-osrm.org/route/v1/foot/${globalCenter.lon},${globalCenter.lat};${newC.lon},${newC.lat}?overview=false`;
+      const url = `https://router.project-osrm.org/route/v1/${getOsrmProfile()}/${D.center.lon},${D.center.lat};${newC.lon},${newC.lat}?overview=false`;
       const rd  = await (await fetch(url)).json();
       if (rd.routes && rd.routes[0]) {
         newC.walk_sec = rd.routes[0].duration;
         newC.walk_min = newC.walk_sec / 60;
+        newC.walkTimeIsReal = true;
       }
     } catch(e) {}
   }
 
-  globalSelected[playerIdx] = newC;
-  // Mettre à jour le popup state
-  if (window._popupState && window._popupState[stateKey]) {
-    window._popupState[stateKey].currentCandidate = newC;
+  D.selected[playerIdx] = newC;
+  if (D.popupState[stateKey]) D.popupState[stateKey].currentCandidate = newC;
+
+  const color    = COLORS[playerIdx % COLORS.length];
+  const newPopup = buildAlternativesPopup(playerIdx, newC, color);
+  if (D.markers[playerIdx]) {
+    D.markers[playerIdx].setLatLng([newC.lat, newC.lon]);
+    D.markers[playerIdx].setPopupContent(newPopup);
+    D.markers[playerIdx].openPopup();
+  }
+  // D8 — Retrace la route pour le nouveau candidat
+  if (D.lines[playerIdx]) {
+    getWalkRoute(D.center, newC).then(coords => {
+      if (D.lines[playerIdx]) D.lines[playerIdx].setLatLngs(coords);
+    });
   }
 
-  // Mettre à jour le marker sans tout redessiner
-  const color = COLORS[playerIdx % COLORS.length];
-  const newPopup = buildAlternativesPopup(playerIdx, newC, null, null, color, 0);
-  if (globalMarkers[playerIdx]) {
-    globalMarkers[playerIdx].setLatLng([newC.lat, newC.lon]);
-    globalMarkers[playerIdx].setPopupContent(newPopup);
-    globalMarkers[playerIdx].openPopup();
-  }
-
-  // Mettre à jour la ligne
-  if (globalLines && globalLines[playerIdx]) {
-    globalLines[playerIdx].setLatLngs([[globalCenter.lat, globalCenter.lon],[newC.lat, newC.lon]]);
-  }
-
-  // Mettre à jour la liste
   const nameEl = document.getElementById('result-name-'+playerIdx);
   const metaEl = document.getElementById('result-meta-'+playerIdx);
-  const ptDef  = PLACE_TYPES.find(pt=>pt.id===newC.type);
+  const ptDef  = PLACE_TYPES.find(pt => pt.id === newC.type);
   const icon   = ptDef ? ptDef.icon : '📍';
+  const timeLabel = newC.walkTimeIsReal
+    ? `<span class="time-real">⏱ ${newC.walk_min.toFixed(1)} min</span>`
+    : `<span class="time-est">⏱ ~${newC.walk_min.toFixed(1)} min</span>`;
   if (nameEl) nameEl.textContent = newC.name;
-  if (metaEl) metaEl.innerHTML = `<span>${icon} ${newC.type}</span><span>⏱ ${newC.walk_min.toFixed(1)} min</span>`;
+  if (metaEl) metaEl.innerHTML   = `<span>${icon} ${newC.type}</span>${timeLabel}`;
 }
 
-// ═══════════════════════════════════════════════
-// EXPORT CSV
-// ═══════════════════════════════════════════════
-function exportCSV() {
-  if (!globalSelected.length) return;
-  const header = ['Joueur','Nom','Type','Latitude','Longitude','Temps_marche_min','Score_qualite','Bonus'];
-  const rows = globalSelected.map((p,i) => [
-    i+1,
-    `"${p.name.replace(/"/g,'""')}"`,
-    p.type,
-    p.lat.toFixed(6),
-    p.lon.toFixed(6),
-    p.walk_min.toFixed(1),
-    p.wait_score,
-    `"${(p.bonuses||[]).join(' | ')}"`
-  ]);
-  const csv = [header, ...rows].map(r=>r.join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+// ═══════════════════════════════════════════════════════════
+// EXPORTS
+// ═══════════════════════════════════════════════════════════
+function downloadBlob(content, filename, mime) {
+  const blob = new Blob([content], {type:mime});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
-  a.href = url; a.download = 'deploiement.csv'; a.click();
+  a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
+}
+
+function exportCSV() {
+  if (!D.selected.length) return;
+  const header = ['Joueur','Nom','Type','Latitude','Longitude','Temps_marche_min','Score_qualite','Score_discretion','Bonus'];
+  const rows = D.selected.map((p,i) => [
+    i+1, `"${p.name.replace(/"/g,'""')}"`, p.type,
+    p.lat.toFixed(6), p.lon.toFixed(6),
+    (p.walk_min_adj || p.walk_min).toFixed(1),
+    p.wait_score, p.discretion_score ?? '-',
+    `"${(p.bonuses||[]).join(' | ')}"`
+  ]);
+  downloadBlob([header,...rows].map(r=>r.join(',')).join('\n'), 'deploiement.csv', 'text/csv;charset=utf-8;');
+}
+
+function exportGPX() {
+  if (!D.selected.length) return;
+  const waypoints = D.selected.map((p, i) => `
+  <wpt lat="${p.lat}" lon="${p.lon}">
+    <name>Joueur ${i+1} — ${p.name}</name>
+    <desc>Type: ${p.type} | Temps: ${(p.walk_min_adj||p.walk_min).toFixed(1)} min | Score: ${p.wait_score}/10 | Discrétion: ${p.discretion_score??'?'}/10</desc>
+    <sym>Flag</sym>
+  </wpt>`).join('');
+  const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Deploiement+">
+  <metadata><name>Déploiement — ${D.center?.display||''}</name></metadata>
+  ${waypoints}
+</gpx>`;
+  downloadBlob(gpx, 'deploiement.gpx', 'application/gpx+xml');
 }
 
 </script>
