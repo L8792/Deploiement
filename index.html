@@ -370,10 +370,11 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
 
       <!-- Types de lieux -->
       <div class="section">
-        <div class="section-title">Types de lieux</div>
+        <div class="section-title">Types de lieux<span class="help-icon" data-tip="Coche les types à rechercher. Ajuste le slider de chaque type pour modifier son poids dans le score (0 = ignoré, 10 = prioritaire).">ⓘ</span></div>
         <div class="select-all-row">
           <button class="btn-small" onclick="toggleAll(true)">Tout cocher</button>
           <button class="btn-small" onclick="toggleAll(false)">Tout décocher</button>
+          <button class="btn-small" onclick="resetTypeScores()" title="Remettre les scores par défaut">↺ Scores</button>
         </div>
         <div class="place-grid" id="placeGrid"></div>
       </div>
@@ -577,27 +578,65 @@ function detectType(tags) {
   return null;
 }
 
+// Scores personnalisés par l'utilisateur (initialisés aux valeurs par défaut)
+const customScores = Object.fromEntries(PLACE_TYPES.map(p => [p.id, p.score]));
+
+function getTypeScore(id) {
+  return customScores[id] ?? (PLACE_TYPES.find(p => p.id === id)?.score ?? 5);
+}
+
 function buildPlaceGrid() {
   const grid = document.getElementById('placeGrid');
   grid.innerHTML = '';
   PLACE_TYPES.forEach(pt => {
+    const isActive = activeTypes.has(pt.id);
+    const score    = customScores[pt.id];
+
     const div = document.createElement('div');
-    div.className = 'place-toggle' + (activeTypes.has(pt.id) ? ' active' : '');
+    div.className = 'place-toggle' + (isActive ? ' active' : '');
     div.dataset.id = pt.id;
-    div.innerHTML = `<span class="pt-icon">${pt.icon}</span>
-      <div class="pt-info"><div class="pt-name">${pt.label}</div>
-      <div class="pt-score">score ${pt.score}/10</div></div>
-      <div class="pt-check">${activeTypes.has(pt.id)?'✓':''}</div>`;
-    div.onclick = () => {
+    div.innerHTML = `
+      <span class="pt-icon">${pt.icon}</span>
+      <div class="pt-info">
+        <div class="pt-name">${pt.label}</div>
+        <div style="display:flex;align-items:center;gap:5px;margin-top:3px;">
+          <input type="range" min="0" max="10" step="1" value="${score}"
+            style="flex:1;accent-color:var(--green);cursor:pointer;height:3px;"
+            oninput="onTypeScoreInput('${pt.id}', this.value, this)"
+            onclick="event.stopPropagation()">
+          <span id="tsval-${pt.id}" style="font-family:'DM Mono',monospace;font-size:.65rem;
+            color:var(--green);font-weight:600;min-width:14px;text-align:right;">${score}</span>
+        </div>
+      </div>
+      <div class="pt-check">${isActive ? '✓' : ''}</div>`;
+
+    div.onclick = (e) => {
+      if (e.target.tagName === 'INPUT') return;
       if (activeTypes.has(pt.id)) {
-        activeTypes.delete(pt.id); div.classList.remove('active'); div.querySelector('.pt-check').textContent='';
+        activeTypes.delete(pt.id);
+        div.classList.remove('active');
+        div.querySelector('.pt-check').textContent = '';
       } else {
-        activeTypes.add(pt.id); div.classList.add('active'); div.querySelector('.pt-check').textContent='✓';
+        activeTypes.add(pt.id);
+        div.classList.add('active');
+        div.querySelector('.pt-check').textContent = '✓';
       }
     };
     grid.appendChild(div);
   });
 }
+
+function onTypeScoreInput(id, val, sliderEl) {
+  customScores[id] = parseInt(val);
+  const lbl = document.getElementById('tsval-' + id);
+  if (lbl) lbl.textContent = val;
+}
+
+function resetTypeScores() {
+  PLACE_TYPES.forEach(pt => { customScores[pt.id] = pt.score; });
+  buildPlaceGrid();
+}
+
 function toggleAll(on) {
   PLACE_TYPES.forEach(pt => { if(on) activeTypes.add(pt.id); else activeTypes.delete(pt.id); });
   buildPlaceGrid();
@@ -722,8 +761,10 @@ function computeComfort(tags) {
 function computeScore(candidate) {
   const weights = getWeights();
   const typeBase = PLACE_TYPES.find(p => p.id === candidate.type);
-  const typeScore = typeBase ? typeBase.score / 10 : 0.5;
-  const comfortScore = computeComfort(candidate.tags || {}) / 10;
+  // Utilise le score personnalisé par l'utilisateur si disponible
+  const rawScore  = typeBase ? getTypeScore(candidate.type) : 5;
+  const typeScore = rawScore / 10;
+  const comfortScore    = computeComfort(candidate.tags || {}) / 10;
   const discretionScore = computeDiscretion(candidate.tags || {}) / 10;
   return Math.round(
     (weights.type * typeScore + weights.comfort * comfortScore + weights.discretion * discretionScore) * 10
@@ -1623,6 +1664,11 @@ function renderResults(selected, center, N, T, T_sec) {
         font-weight:600;cursor:pointer;border-radius:2px;"
         onmouseover="this.style.background='#e07b2a';this.style.color='#fff';"
         onmouseout="this.style.background='#fdf2e8';this.style.color='#e07b2a';">📂 Charger version</button>
+      <button onclick="exportMapPNG()" style="padding:7px;border:1px solid #2d6fa3;
+        background:#e8f0fa;color:#2d6fa3;font-family:'DM Sans',sans-serif;font-size:.72rem;
+        font-weight:600;cursor:pointer;border-radius:2px;grid-column:span 2;"
+        onmouseover="this.style.background='#2d6fa3';this.style.color='#fff';"
+        onmouseout="this.style.background='#e8f0fa';this.style.color='#2d6fa3';">🖼 Exporter carte (PNG)</button>
     </div>`;
 
   // ── Cercles d'exclusion (zone interdite autour de chaque point placé)
@@ -2158,6 +2204,7 @@ function exportVersion() {
         discretion: parseInt(document.getElementById('wDiscretion').value),
       },
       activeTypes: [...activeTypes],
+      customScores: { ...customScores },
       isochroneEnabled: document.getElementById('isochroneToggle').checked,
     },
     selected:    D.selected,
@@ -2210,6 +2257,9 @@ async function importVersion(event) {
     if (data.params.activeTypes) {
       activeTypes.clear();
       data.params.activeTypes.forEach(id => activeTypes.add(id));
+      if (data.params.customScores) {
+        Object.assign(customScores, data.params.customScores);
+      }
       buildPlaceGrid();
     }
     document.getElementById('isochroneToggle').checked = !!data.params.isochroneEnabled;
@@ -2255,6 +2305,131 @@ async function importVersion(event) {
     console.error(e);
   }
   event.target.value = '';
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXPORT PNG / PDF
+// ═══════════════════════════════════════════════════════════
+async function exportMapPNG() {
+  if (!D.selected.length) {
+    showModal('Rien à exporter', 'Lance un déploiement avant d\'exporter la carte.');
+    return;
+  }
+  setStatus('Génération PNG…', 'running');
+
+  try {
+    // Charger leaflet-image dynamiquement si pas encore chargé
+    await loadScript('https://unpkg.com/leaflet-image@0.4.0/leaflet-image.js');
+
+    leafletImage(map, function(err, canvas) {
+      if (err) {
+        setStatus('Erreur PNG : ' + err, 'error');
+        return;
+      }
+
+      // Ajouter une légende sur le canvas
+      const ctx    = canvas.getContext('2d');
+      const legend = buildLegendLines();
+      const padX   = 14, padY = 12, lineH = 18, boxW = 220;
+      const boxH   = legend.length * lineH + padY * 2;
+      const bx     = canvas.width - boxW - 12;
+      const by     = canvas.height - boxH - 12;
+
+      // Fond blanc semi-transparent
+      ctx.fillStyle = 'rgba(255,255,255,0.88)';
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(bx, by, boxW, boxH, 6);
+        ctx.fill();
+      } else {
+        ctx.fillRect(bx, by, boxW, boxH);
+      }
+
+      // Texte
+      ctx.fillStyle = '#1a2e24';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillText('Déploiement+', bx + padX, by + padY + 11);
+      ctx.font = '10px sans-serif';
+      legend.forEach((line, i) => {
+        ctx.fillStyle = line.color || '#4a6e5a';
+        ctx.fillText(line.text, bx + padX, by + padY + 11 + (i + 1) * lineH);
+      });
+
+      // Télécharger
+      const link = document.createElement('a');
+      link.download = `deploiement_${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      setStatus('PNG exporté ✓', 'ok');
+    });
+  } catch(e) {
+    // Fallback : screenshot simple via html2canvas si leaflet-image échoue
+    setStatus('Essai méthode alternative…', 'running');
+    try {
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+      const mapEl = document.getElementById('map');
+      const canvas = await html2canvas(mapEl, {
+        useCORS: true, allowTaint: true, scale: 2,
+        logging: false,
+      });
+      appendLegendToCanvas(canvas);
+      const link = document.createElement('a');
+      link.download = `deploiement_${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      setStatus('PNG exporté ✓', 'ok');
+    } catch(e2) {
+      setStatus('Export PNG non supporté dans ce navigateur', 'error');
+    }
+  }
+}
+
+function buildLegendLines() {
+  const lines = [];
+  const addr = (D.center?.display || '').split(',').slice(0, 2).join(',');
+  lines.push({ text: addr.substring(0, 32), color: '#7a9e8a' });
+  lines.push({ text: `${D.selected.length} joueurs · trajet ${getMinTimeMinutes()}–${D.T} min`, color: '#1a6b3c' });
+  D.selected.slice(0, 8).forEach((p, i) => {
+    const wm = (p.walk_min_adj || p.walk_min).toFixed(1);
+    lines.push({
+      text: `${i+1}. ${p.name.substring(0,22)} · ${wm}min`,
+      color: COLORS[i % COLORS.length]
+    });
+  });
+  if (D.selected.length > 8) {
+    lines.push({ text: `… +${D.selected.length - 8} autres`, color: '#aaa' });
+  }
+  return lines;
+}
+
+function appendLegendToCanvas(canvas) {
+  try {
+    const ctx    = canvas.getContext('2d');
+    const legend = buildLegendLines();
+    const padX   = 14, padY = 12, lineH = 36, boxW = 440;
+    const boxH   = legend.length * lineH + padY * 2;
+    const bx     = canvas.width  - boxW - 12;
+    const by     = canvas.height - boxH - 12;
+    ctx.fillStyle = 'rgba(255,255,255,0.88)';
+    ctx.fillRect(bx, by, boxW, boxH);
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#1a2e24';
+    ctx.fillText('Déploiement+', bx + padX, by + padY + 14);
+    ctx.font = '12px sans-serif';
+    legend.forEach((line, i) => {
+      ctx.fillStyle = line.color || '#4a6e5a';
+      ctx.fillText(line.text, bx + padX, by + padY + 14 + (i + 1) * lineH);
+    });
+  } catch(e) {}
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
 }
 </script>
 </body>
