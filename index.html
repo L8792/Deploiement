@@ -756,7 +756,7 @@ function buildAlternativesPopup(playerIdx, currentCandidate, _unused, marker, co
   window._popupState[stateKey] = { playerIdx, color, currentCandidate };
 
   let altsHtml = '';
-  if (pageAlts.length) {
+  if (alts.length) {
     const altItems = alts.map((alt) => {
       const altDef  = PLACE_TYPES.find(pt=>pt.id===alt.type);
       const altIcon = altDef ? altDef.icon : '📍';
