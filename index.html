@@ -358,15 +358,15 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
 
       <!-- Poids de scoring -->
       <div class="section">
-        <div class="section-title">Pondération du score<span class="help-icon" data-tip="Chaque candidat reçoit un score combinant le type de lieu, le confort et la discrétion. Ajuste les curseurs pour prioriser un critère.">ⓘ</span></div>
+        <div class="section-title">Pondération du score<span class="help-icon" data-tip="Chaque candidat reçoit un score 0-10 combinant 3 critères. Ajuste les curseurs pour favoriser un critère.">ⓘ</span></div>
         <div style="display:flex; gap:6px; margin-bottom:8px;">
           <button class="btn-small active" id="preset-balanced" onclick="applyPreset('balanced')">⚖️ Équilibré</button>
           <button class="btn-small" id="preset-comfort" onclick="applyPreset('comfort')">🛋 Confort</button>
           <button class="btn-small" id="preset-discret" onclick="applyPreset('discret')">🫥 Discrétion</button>
         </div>
-        <div class="weights-row" style="grid-template-columns:1fr 1fr;">
+        <div class="weights-row">
           <div class="weight-field">
-            <label>Type<span class="help-icon" data-tip="Poids du type de lieu dans le tri. Un poids élevé favorise les parcs/cafés/gares au détriment des bancs.">ⓘ</span></label>
+            <label>Type<span class="help-icon" data-tip="Poids du type de lieu (parc=9, café=8, banc=5...). Plus le poids est élevé, plus le type prime.">ⓘ</span></label>
             <input type="range" id="wType" min="0" max="10" value="5" step="1"
               oninput="document.getElementById('wTypeVal').textContent=this.value">
             <div class="wval" id="wTypeVal">5</div>
@@ -377,16 +377,11 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
               oninput="document.getElementById('wComfortVal').textContent=this.value">
             <div class="wval" id="wComfortVal">3</div>
           </div>
-        </div>
-
-        <!-- Slider discrétion séparé : définit les pts bonus/malus max -->
-        <div class="field" style="margin-top:12px;">
-          <label>Impact discrétion<span class="help-icon" data-tip="Définit combien de points la discrétion peut ajouter ou retirer au score final. À 0 : la discrétion est ignorée. À 5 : un lieu très discret gagne +5 pts, un lieu très exposé perd −5 pts.">ⓘ</span></label>
-          <input type="range" id="wDiscretion" min="0" max="10" step="1" value="3"
-            oninput="onDiscretionSlider(this.value)">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2px;">
-            <span style="font-size:.65rem;color:var(--muted);">−<strong id="wDiscretionVal" style="font-family:'DM Mono',monospace;color:var(--green);">3</strong> pts exposé</span>
-            <span style="font-size:.65rem;color:var(--muted);">+<strong style="font-family:'DM Mono',monospace;color:var(--green);" id="wDiscretionValPos">3</strong> pts discret</span>
+          <div class="weight-field">
+            <label>Discrétion<span class="help-icon" data-tip="Poids de la discrétion : couvert, arboré, peu fréquenté. Pénalise les belvédères, marchés, grandes places.">ⓘ</span></label>
+            <input type="range" id="wDiscretion" min="0" max="10" value="2" step="1"
+              oninput="document.getElementById('wDiscretionVal').textContent=this.value">
+            <div class="wval" id="wDiscretionVal">2</div>
           </div>
         </div>
       </div>
@@ -435,7 +430,7 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
           <p style="margin-bottom:8px;"><b style="color:var(--text);">Isochrone</b><br>
           Polygone qui représente la zone réellement atteignable en X minutes. Sert à filtrer les candidats au lieu d'utiliser un simple cercle.</p>
           <p style="margin-bottom:8px;"><b style="color:var(--text);">Score composite</b><br>
-          Chaque lieu reçoit un score combinant : type de lieu (configurable par les +/−), confort (abri/bancs/éclairage), et un bonus/malus de discrétion. Le slider "Impact discrétion" définit combien de points peuvent être gagnés ou perdus : lieux couverts, végétation, tunnels, lieux touristiques animés → bonus. Routes larges, grandes places, ponts → malus.</p>
+          Chaque lieu reçoit un score 0-10 combinant : type de lieu (parcs ≫ bancs), confort (abri/bancs/éclairage), discrétion (couvert/calme).</p>
           <p style="margin-bottom:8px;"><b style="color:var(--text);">Distance min entre joueurs</b><br>
           Quand un point est placé, un disque de rayon = distance min est exclu autour de lui. Aucun autre joueur ne peut y être placé. Plus ce rayon est grand, plus les joueurs seront dispersés (mais moins tu peux en placer).</p>
           <p style="margin-bottom:8px;"><b style="color:var(--text);">Fenêtre de temps</b><br>
@@ -732,9 +727,9 @@ function estimateWalkSec(distGeo, speedKmh) {
 // PRESETS DE SCORING
 // ═══════════════════════════════════════════════════════════
 const SCORE_PRESETS = {
-  balanced: { type: 5, comfort: 3, discretion: 3 },
-  comfort:  { type: 3, comfort: 7, discretion: 1 },
-  discret:  { type: 3, comfort: 2, discretion: 8 },
+  balanced: { type: 5, comfort: 3, discretion: 2 },
+  comfort:  { type: 3, comfort: 6, discretion: 1 },
+  discret:  { type: 2, comfort: 2, discretion: 6 },
 };
 function applyPreset(name) {
   const p = SCORE_PRESETS[name];
@@ -745,7 +740,6 @@ function applyPreset(name) {
   document.getElementById('wComfortVal').textContent = p.comfort;
   document.getElementById('wDiscretion').value = p.discretion;
   document.getElementById('wDiscretionVal').textContent = p.discretion;
-  document.getElementById('wDiscretionValPos').textContent = p.discretion;
   ['balanced','comfort','discret'].forEach(id => {
     document.getElementById('preset-'+id)?.classList.toggle('active', id === name);
   });
@@ -754,110 +748,48 @@ function applyPreset(name) {
 function getWeights() {
   const t = parseInt(document.getElementById('wType').value) || 5;
   const c = parseInt(document.getElementById('wComfort').value) || 3;
-  const total = t + c || 1;
-  return { type: t / total, comfort: c / total };
+  const d = parseInt(document.getElementById('wDiscretion').value) || 2;
+  const total = t + c + d || 1;
+  return { type: t/total, comfort: c/total, discretion: d/total };
 }
 
-// Retourne l'impact max en pts bonus/malus depuis le slider
-function getDiscretionMaxPts() {
-  return parseInt(document.getElementById('wDiscretion').value) || 0;
+function computeDiscretion(tags) {
+  let score = 5;
+  if (tags.covered === 'yes' || tags.covered === 'arcade') score += 2;
+  if (tags.natural === 'tree_row' || tags.natural === 'wood') score += 1;
+  if (tags.tunnel === 'yes') score += 2;
+  if (tags.bridge === 'yes') score -= 1;
+  if (tags.tourism === 'viewpoint') score -= 2;
+  if (tags.amenity === 'marketplace') score -= 1;
+  if (tags.highway === 'primary' || tags.highway === 'secondary') score -= 2;
+  if (tags.name && tags.name.toLowerCase().includes('place')) score -= 1;
+  if (tags.access === 'private') score += 2;
+  return Math.max(0, Math.min(10, score));
 }
 
-function onDiscretionSlider(val) {
-  document.getElementById('wDiscretionVal').textContent = val;
-  document.getElementById('wDiscretionValPos').textContent = val;
-}
-
-// ─────────────────────────────────────────────────────────
-// DISCRÉTION — score brut en points (non normalisé)
-// Règles définies par l'utilisateur, basées sur les tags OSM
-// ─────────────────────────────────────────────────────────
-
-// Seuil max théorique (somme de tous les bonus possibles simultanément)
-// Utilisé pour normaliser le score brut → [−1, +1]
-const DISCRETION_MAX_RAW = 7.5; // covered+tunnel = +4, végétation +0.5, banc +1, tourisme +2 = 7.5
-
-function computeDiscretionRaw(tags) {
-  let pts = 0;
-
-  // ── BONUS (lieu discret)
-  if (tags.covered === 'yes' || tags.covered === 'arcade') pts += 2;
-
-  // Végétation : tags variés selon le niveau de détail OSM
-  if (
-    tags.natural === 'wood' || tags.natural === 'scrub' ||
-    tags.natural === 'tree_row' || tags.natural === 'tree' ||
-    tags.landuse === 'forest' || tags.landuse === 'grass' ||
-    tags.leisure === 'garden' || tags.leisure === 'park'
-  ) pts += 0.5;
-
-  if (tags.tunnel === 'yes') pts += 2;
-
-  if (tags.amenity === 'bench') pts += 1;
-
-  // Lieu touristique animé → foule = couverture naturelle
-  if (
-    tags.tourism === 'attraction' || tags.tourism === 'viewpoint' ||
-    tags.tourism === 'museum' || tags.tourism === 'theme_park'
-  ) pts += 2;
-
-  // ── MALUS (lieu exposé)
-  if (tags.bridge === 'yes') pts -= 1;
-
-  // Place publique
-  if (
-    tags.place === 'square' ||
-    (tags.name && /\bplace\b/i.test(tags.name)) ||
-    tags.highway === 'pedestrian' ||
-    tags.amenity === 'marketplace'
-  ) pts -= 2;
-
-  // Routes principales et voies larges
-  if (tags.highway === 'trunk' || tags.highway === 'motorway' || tags.highway === 'primary') {
-    pts -= 4;
-  } else if (tags.highway === 'secondary' || tags.highway === 'tertiary' || tags.highway === 'road') {
-    pts -= 2;
-  }
-
-  return pts; // non borné intentionnellement — sera clampé à l'usage
-}
-
-// Score normalisé [0, 10] pour affichage (10 = très discret)
-function computeDiscretionDisplay(tags) {
-  const raw = computeDiscretionRaw(tags);
-  // Centre sur 5, ±DISCRETION_MAX_RAW = ±5
-  const normalized = 5 + (raw / DISCRETION_MAX_RAW) * 5;
-  return Math.max(0, Math.min(10, normalized));
-}
-
-// Bonus/malus en pts finaux appliqué au score de tri
-// maxPts = valeur du slider discrétion
-function computeDiscretionBonus(tags, maxPts) {
-  if (maxPts === 0) return 0;
-  const raw = computeDiscretionRaw(tags);
-  // raw / DISCRETION_MAX_RAW → ratio dans [−1, +1] environ
-  const ratio = Math.max(-1, Math.min(1, raw / DISCRETION_MAX_RAW));
-  return ratio * maxPts;
+function computeComfort(tags) {
+  let score = 0;
+  if (tags.covered === 'yes' || tags.covered === 'arcade') score += 2;
+  if (tags.bench === 'yes') score += 1;
+  if (tags.shelter === 'yes') score += 1;
+  if (tags.lit === 'yes') score += 1;
+  if (['paving_stones','asphalt','concrete'].includes(tags.surface)) score += 1;
+  if (['yes','public','permissive'].includes(tags.access)) score += 1;
+  if (tags.fee === 'no') score += 1;
+  return Math.min(score, 10);
 }
 
 function computeScore(candidate) {
-  const weights  = getWeights();
-  const maxPts   = getDiscretionMaxPts();
-
-  // Score type : 0–10 personnalisé → normalisé 0–1
-  const rawType   = candidate.type ? getTypeScore(candidate.type) : 5;
-  const typeScore = rawType / 10;
-
-  // Score confort : 0–10 → normalisé 0–1
-  const comfortScore = computeComfort(candidate.tags || {}) / 10;
-
-  // Score de base (type + confort), échelle 0–10
-  const base = (weights.type * typeScore + weights.comfort * comfortScore) * 10;
-
-  // Bonus/malus discrétion en points absolus
-  const discretionBonus = computeDiscretionBonus(candidate.tags || {}, maxPts);
-
-  return Math.round(base + discretionBonus);
+  const weights = getWeights();
+  const typeBase = PLACE_TYPES.find(p => p.id === candidate.type);
+  // Utilise le score personnalisé par l'utilisateur si disponible
+  const rawScore  = typeBase ? getTypeScore(candidate.type) : 5;
+  const typeScore = rawScore / 10;
+  const comfortScore    = computeComfort(candidate.tags || {}) / 10;
+  const discretionScore = computeDiscretion(candidate.tags || {}) / 10;
+  return Math.round(
+    (weights.type * typeScore + weights.comfort * comfortScore + weights.discretion * discretionScore) * 10
+  );
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1042,16 +974,10 @@ function detectBonuses(tags) {
   return b;
 }
 
-function discretionBadge(tags) {
-  const raw   = computeDiscretionRaw(tags || {});
-  const disp  = computeDiscretionDisplay(tags || {});
-  const bonus = computeDiscretionBonus(tags || {}, getDiscretionMaxPts());
-  const sign  = bonus >= 0 ? '+' : '';
-  const bonusTxt = bonus !== 0 ? ` (${sign}${bonus.toFixed(1)} pts)` : '';
-
-  if (disp >= 7)  return `<span style="color:#1a6b3c;">🫥 Discret${bonusTxt}</span>`;
-  if (disp >= 4)  return `<span style="color:#c8970a;">👁 Modéré${bonusTxt}</span>`;
-  return `<span style="color:#c0392b;">📢 Exposé${bonusTxt}</span>`;
+function discretionBadge(score) {
+  if (score >= 7) return `<span style="color:#1a6b3c;">🫥 Discret (${score}/10)</span>`;
+  if (score >= 4) return `<span style="color:#c8970a;">👁 Modéré (${score}/10)</span>`;
+  return `<span style="color:#c0392b;">📢 Exposé (${score}/10)</span>`;
 }
 
 function clearMap() {
@@ -1552,11 +1478,13 @@ async function run() {
       const brg      = bearing(center, {lat:clat, lon:clon});
       const pseudoCand = { type:ptype, tags, lat:clat, lon:clon };
       const compScore  = computeScore(pseudoCand);
+      const discretion = computeDiscretion(tags);
       candidates.push({
         lat: clat, lon: clon,
         name: tags.name || tags['name:fr'] || ptype,
         type: ptype,
         wait_score: compScore,
+        discretion_score: discretion,
         tags, bonuses,
         dist_geo: distGeo,
         bearing:  brg,
@@ -1832,7 +1760,7 @@ function renderResults(selected, center, N, T, T_sec) {
       const walkM = sec != null ? sec / 60 : p.walk_min;
       D.selected[i] = { ...D.selected[i], lat:ll.lat, lon:ll.lng, name:newName,
         walk_min:walkM, walk_sec:walkM*60, walk_min_adj:null, bonuses:[], wait_score:5,
-        type:'custom', tags:{}, walkTimeIsReal: sec != null };
+        type:'custom', tags:{}, walkTimeIsReal: sec != null, discretion_score:5 };
       const updPop = buildAlternativesPopup(i, D.selected[i], color);
       marker.setPopupContent(updPop);
       marker.openPopup();
@@ -1859,7 +1787,7 @@ function renderResults(selected, center, N, T, T_sec) {
         </div>
         <div class="result-stars">${stars} ${p.wait_score}/10</div>
         ${elevHtml}
-        <div class="result-discretion">${discretionBadge(p.tags)}</div>
+        <div class="result-discretion">${discretionBadge(p.discretion_score)}</div>
         ${p.bonuses.length ? `<div class="result-bonus">${p.bonuses.join(' · ')}</div>` : ''}
         <div style="font-size:.62rem;color:#aaa;margin-top:3px;font-family:'DM Mono',monospace;">
           ↔ glisser sur la carte · cliquer pour zoomer
@@ -1921,7 +1849,7 @@ function buildAlternativesPopup(playerIdx, currentCandidate, color) {
       ${bonusItems}
     </div>` : '';
 
-  const discTags = currentCandidate.tags || {};
+  const discScore = currentCandidate.discretion_score ?? computeDiscretion(currentCandidate.tags || {});
   const elevHtml  = (currentCandidate.elev_gain > 0)
     ? `<div style="font-size:10px;color:#c8970a;margin-top:3px;">↗ +${Math.round(currentCandidate.elev_gain)}m (≈+${(currentCandidate.elev_gain/10).toFixed(1)}min)</div>`
     : '';
@@ -1971,7 +1899,7 @@ function buildAlternativesPopup(playerIdx, currentCandidate, color) {
     <div style="color:#7a9e8a;font-size:11px;">${icon} ${currentCandidate.type}</div>
     <div style="margin-top:5px;font-size:12px;">⏱ <b>${timeStr}</b> à pied</div>
     <div style="color:#1a6b3c;font-size:11px;margin-top:2px;">${stars} <b>${currentCandidate.wait_score}/10</b></div>
-    <div style="font-size:10px;margin-top:2px;">${discretionBadge(discTags)}</div>
+    <div style="font-size:10px;margin-top:2px;">${discretionBadge(discScore)}</div>
     ${elevHtml}
     ${bonusSection}
     <a href="${svLink}" target="_blank"
@@ -2052,7 +1980,7 @@ function exportCSV() {
     i+1, `"${p.name.replace(/"/g,'""')}"`, p.type,
     p.lat.toFixed(6), p.lon.toFixed(6),
     (p.walk_min_adj || p.walk_min).toFixed(1),
-    p.wait_score, computeDiscretionDisplay(p.tags || {}).toFixed(1),
+    p.wait_score, p.discretion_score ?? '-',
     `"${(p.bonuses||[]).join(' | ')}"`
   ]);
   downloadBlob([header,...rows].map(r=>r.join(',')).join('\n'), 'deploiement.csv', 'text/csv;charset=utf-8;');
@@ -2063,7 +1991,7 @@ function exportGPX() {
   const waypoints = D.selected.map((p, i) => `
   <wpt lat="${p.lat}" lon="${p.lon}">
     <name>Joueur ${i+1} — ${p.name}</name>
-    <desc>Type: ${p.type} | Temps: ${(p.walk_min_adj||p.walk_min).toFixed(1)} min | Score: ${p.wait_score}/10 | Discrétion: ${computeDiscretionDisplay(p.tags||{}).toFixed(1)}/10</desc>
+    <desc>Type: ${p.type} | Temps: ${(p.walk_min_adj||p.walk_min).toFixed(1)} min | Score: ${p.wait_score}/10 | Discrétion: ${p.discretion_score??'?'}/10</desc>
     <sym>Flag</sym>
   </wpt>`).join('');
   const gpx = `<?xml version="1.0" encoding="UTF-8"?>
