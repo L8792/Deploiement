@@ -281,7 +281,7 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
             </div>
           </div>
           <div class="field">
-            <label>Temps cible<span class="help-icon" data-tip="Durée de marche visée pour chaque joueur depuis le point central. C'est l'objectif principal de l'algorithme.">ⓘ</span></label>
+            <label>Temps cible<span class="help-icon" data-tip="Plafond du temps de marche : aucun joueur ne sera placé au-delà. Combiné au temps minimum, définit la fenêtre [Tmin, Tcible].">ⓘ</span></label>
             <input type="range" id="tMinutes" min="2" max="30" value="10"
               oninput="onTargetTimeInput(this.value)">
             <div class="range-val">
@@ -292,21 +292,11 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
 
         <!-- FEATURE 2 : Temps minimum d'arrivée -->
         <div class="field" style="margin-top:10px;">
-          <label>Temps minimum d'arrivée<span class="help-icon" data-tip="Aucun joueur ne sera placé en deçà de ce temps de marche. Mettre 0 pour désactiver.">ⓘ</span></label>
+          <label>Temps minimum d'arrivée<span class="help-icon" data-tip="Plancher du temps de marche : aucun joueur ne sera placé en deçà. Mettre 0 pour accepter même les lieux très proches.">ⓘ</span></label>
           <input type="range" id="tMinMinutes" min="0" max="29" step="1" value="0"
             oninput="onMinTimeInput(this.value)">
           <div class="range-val">
             <strong id="tMinVal">0</strong><small>min (0 = pas de minimum)</small>
-          </div>
-        </div>
-
-        <!-- FEATURE 3 : Tolérance temps de trajet -->
-        <div class="field" style="margin-top:10px;">
-          <label>Tolérance temps de trajet<span class="help-icon" data-tip="Marge acceptée autour du temps cible. Ex : tolérance 20% à 10min = points entre 8 et 12min acceptés.">ⓘ</span></label>
-          <input type="range" id="tolerance" min="0" max="50" step="5" value="20"
-            oninput="document.getElementById('toleranceVal').textContent=this.value">
-          <div class="range-val">
-            <strong id="toleranceVal">20</strong><small>% du temps cible</small>
           </div>
         </div>
 
@@ -427,8 +417,8 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
           Chaque lieu reçoit un score 0-10 combinant : type de lieu (parcs ≫ bancs), confort (abri/bancs/éclairage), discrétion (couvert/calme).</p>
           <p style="margin-bottom:8px;"><b style="color:var(--text);">Secteurs adaptatifs</b><br>
           L'algo regroupe les candidats par direction angulaire (k-means) pour garantir que les joueurs soient répartis dans toutes les directions.</p>
-          <p style="margin-bottom:8px;"><b style="color:var(--text);">Tolérance & marge</b><br>
-          Une tolérance de 20% à 10min signifie que des points entre 8 et 12min sont acceptés. Augmente la tolérance si peu de candidats sont trouvés.</p>
+          <p style="margin-bottom:8px;"><b style="color:var(--text);">Fenêtre de temps</b><br>
+          Les deux sliders définissent une fenêtre <code>[Tmin, Tcible]</code>. Ex : Tmin=0, Tcible=10 → tous les lieux à 10 min ou moins. Tmin=5, Tcible=10 → uniquement les lieux entre 5 et 10 min.</p>
           <p style="margin-bottom:8px;"><b style="color:var(--text);">Raccourcis</b><br>
           <code>Ctrl/Cmd+Z</code> : annuler le dernier déplacement<br>
           <code>Échap</code> : annuler une prévisualisation</p>
@@ -613,16 +603,13 @@ function getOsrmProfile() {
 }
 
 // ─────────────────────────────────────────────────────────
-// FEATURE 1, 2, 3 : nouveaux getters
+// FEATURE 1, 2 : nouveaux getters
 // ─────────────────────────────────────────────────────────
 function getMinTimeMinutes() {
   return parseInt(document.getElementById('tMinMinutes').value) || 0;
 }
 function getMinSpacing() {
   return parseInt(document.getElementById('minSpacing').value) || 0;
-}
-function getTolerancePct() {
-  return (parseInt(document.getElementById('tolerance').value) || 20) / 100;
 }
 
 // FEATURE 2 : auto-ajustement du slider min vs cible
@@ -1297,11 +1284,11 @@ async function run() {
     setStep('filter','running');
     setStatus('Filtrage et scoring…','running');
 
-    // FEATURE 2 : utiliser tMinSec si l'utilisateur l'a défini
+    // Mode plafond : rMin basé sur Tmin (0 par défaut), rMax sur T+marge
     const tMinSec = getMinTimeMinutes() * 60;
-    const rMin = tMinSec > 0
-      ? tMinSec * speedMs * 0.9      // marge réduite si min explicite
-      : T_sec * speedMs * 0.4;       // ancien comportement par défaut
+    // Marge pour absorber l'imprécision de l'estimation distance→temps
+    // (le vrai filtrage strict se fait après le calcul Valhalla)
+    const rMin = tMinSec > 0 ? tMinSec * speedMs * 0.7 : 0;
     const rMax = T_sec * speedMs * 1.8;
 
     const candidates = [];
@@ -1352,10 +1339,13 @@ async function run() {
     const prePool = [];
     for (let i = 0; i < N; i++) {
       if (!sectors[i].length) continue;
-      const sorted = [...sectors[i]].sort((a,b) =>
-        b.wait_score - a.wait_score ||
-        (Math.abs(a.walk_sec - T_sec) - Math.abs(b.walk_sec - T_sec))
-      );
+      // Mode plafond : on privilégie ceux qui sont DANS la fenêtre [Tmin, T] (estimée),
+      // puis on trie par score décroissant. Les hors-fenêtre arrivent en dernier au cas où.
+      const sorted = [...sectors[i]].sort((a, b) => {
+        const aIn = (a.walk_sec >= tMinSec && a.walk_sec <= T_sec) ? 0 : 1;
+        const bIn = (b.walk_sec >= tMinSec && b.walk_sec <= T_sec) ? 0 : 1;
+        return aIn - bIn || b.wait_score - a.wait_score;
+      });
       prePool.push(...sorted.slice(0, K));
     }
 
@@ -1375,23 +1365,27 @@ async function run() {
     setStep('select','running');
     setStatus('Sélection optimale…','running');
 
-    // FEATURE 3 : tolérance configurable (plancher abaissé à 60s)
-    const tolerancePct = getTolerancePct();
-    const margin = Math.max(60, T_sec * tolerancePct);
+    // MODE PLAFOND : fenêtre [Tmin, T] — on prend les meilleurs scores dans cette fenêtre
     // FEATURE 1 : distance minimale entre joueurs (vol d'oiseau)
     const minSpacing = getMinSpacing();
     const selected = [];
     let spacingViolations = 0;
+    let emptySectors = 0;
 
     for (let i = 0; i < N; i++) {
       if (!sectors[i].length) continue;
       const sTimed = sectors[i].filter(c => prePool.includes(c));
-      // FEATURE 2 : exclure les candidats sous le temps min
-      const valid  = sTimed.filter(c => c.walk_sec < 9999 && c.walk_sec >= tMinSec);
-      if (!valid.length) continue;
-      const inMargin = valid.filter(c => Math.abs(c.walk_sec - T_sec) <= margin);
-      const pool     = inMargin.length ? inMargin : valid;
-      pool.sort((a,b) => Math.abs(a.walk_sec-T_sec)-Math.abs(b.walk_sec-T_sec) || b.wait_score-a.wait_score);
+      // Fenêtre [Tmin, T] : entre le plancher et le plafond
+      const valid  = sTimed.filter(c =>
+        c.walk_sec < 9999 &&
+        c.walk_sec >= tMinSec &&
+        c.walk_sec <= T_sec
+      );
+      if (!valid.length) { emptySectors++; continue; }
+
+      // Tri : meilleur score d'abord, puis tiebreak sur la proximité au plafond (plus c'est loin, mieux c'est dans le budget)
+      valid.sort((a,b) => b.wait_score - a.wait_score || b.walk_sec - a.walk_sec);
+      const pool = valid;
 
       // FEATURE 1 : recherche du premier candidat respectant la distance min
       const respectsSpacing = (cand) =>
@@ -1402,20 +1396,32 @@ async function run() {
       selected.push(candidate);
     }
 
+    // Fallback : compléter avec les candidats restants dans la fenêtre [Tmin, T]
     if (selected.length < N) {
       const already = new Set(selected);
       const rem = prePool.filter(c =>
-        !already.has(c) && c.walk_sec < 9999 && c.walk_sec >= tMinSec
-      ).sort((a,b) => Math.abs(a.walk_sec-T_sec) - Math.abs(b.walk_sec-T_sec));
+        !already.has(c) &&
+        c.walk_sec < 9999 &&
+        c.walk_sec >= tMinSec &&
+        c.walk_sec <= T_sec
+      ).sort((a,b) => b.wait_score - a.wait_score);
       selected.push(...greedyDisperse(rem, N - selected.length));
     }
 
-    if (!selected.length) throw new Error('Aucun résultat. Essaie d\'autres types de lieux ou réduis le temps minimum.');
-    let selectMsg = `${selected.length} positions sélectionnées`;
-    if (spacingViolations > 0) {
-      selectMsg += ` · ⚠ ${spacingViolations} violation(s) distance min`;
+    if (!selected.length) {
+      throw new Error('Aucun candidat dans la fenêtre [Tmin, Tcible]. Augmente le temps cible, baisse le minimum, ou élargis les types de lieux.');
     }
-    setStep('select','done', selectMsg);
+
+    let selectMsg = `${selected.length}/${N} positions sélectionnées`;
+    if (spacingViolations > 0) {
+      selectMsg += ` · ⚠ ${spacingViolations} violation(s) distance`;
+    }
+    if (selected.length < N) {
+      const missing = N - selected.length;
+      selectMsg += ` · ⚠ ${missing} secteur(s) sans candidat`;
+      setStatus(`⚠ ${missing}/${N} joueurs manquants — élargis le temps cible ou les types`, 'error');
+    }
+    setStep('select', selected.length < N ? 'error' : 'done', selectMsg);
     D.selected = selected;
 
     // ── ÉTAPE 8 : DÉNIVELÉ ───────────────────────────────
@@ -1480,12 +1486,7 @@ function renderResults(selected, center, N, T, T_sec) {
       dists.push(haversine(selected[i], selected[j]));
 
   document.getElementById('statsSection').style.display = '';
-  // FEATURE 3 : calculer la fenêtre effective
-  const _tolPct = getTolerancePct();
-  const _T_sec  = T * 60;
-  const _margin = Math.max(60, _T_sec * _tolPct);
-  const _winLow  = Math.max(0, (_T_sec - _margin) / 60);
-  const _winHigh = (_T_sec + _margin) / 60;
+  // Mode plafond : la fenêtre est [Tmin, T]
   const _tMin    = getMinTimeMinutes();
   const _spacing = getMinSpacing();
 
@@ -1493,8 +1494,7 @@ function renderResults(selected, center, N, T, T_sec) {
     <div class="stat-row"><span>Temps moyen</span><b>${mean.toFixed(1)} min</b></div>
     <div class="stat-row"><span>Écart-type</span><b>${std.toFixed(2)} min</b></div>
     <div class="stat-row"><span>Min / Max</span><b>${Math.min(...wm).toFixed(1)} / ${Math.max(...wm).toFixed(1)} min</b></div>
-    <div class="stat-row"><span>Fenêtre acceptée</span><b>${_winLow.toFixed(1)}–${_winHigh.toFixed(1)} min</b></div>
-    ${_tMin > 0 ? `<div class="stat-row"><span>Temps min imposé</span><b>${_tMin} min</b></div>` : ''}
+    <div class="stat-row"><span>Fenêtre demandée</span><b>${_tMin}–${T} min</b></div>
     <div class="stat-row"><span>Distance min inter-joueurs</span><b>${Math.round(Math.min(...dists))} m</b></div>
     <div class="stat-row"><span>Distance max inter-joueurs</span><b>${Math.round(Math.max(...dists))} m</b></div>
     ${_spacing > 0 ? `<div class="stat-row"><span>Distance min imposée</span><b>${_spacing} m</b></div>` : ''}
@@ -1635,19 +1635,23 @@ document.getElementById('address').addEventListener('keydown', e => { if(e.key==
 // ═══════════════════════════════════════════════════════════
 function getSectorAlternatives(playerIdx, currentCandidate) {
   const T_sec = D.T * 60;
+  const tMinSec = getMinTimeMinutes() * 60;
   const brg = currentCandidate.bearing ?? bearing(D.center, currentCandidate);
   return D.geoFiltered
     .filter(c => {
       if (c === currentCandidate) return false;
       const cBrg = c.bearing ?? bearing(D.center, c);
-      return angularDist(cBrg, brg) < 45;
+      if (angularDist(cBrg, brg) >= 45) return false;
+      // Mode plafond : alternatives doivent aussi être dans la fenêtre [Tmin, T]
+      const ws = c.walk_sec ?? estimateWalkSec(c.dist_geo, getSpeedKmh());
+      return ws >= tMinSec && ws <= T_sec;
     })
     .map(c => ({
       ...c,
       walk_sec: c.walk_sec ?? estimateWalkSec(c.dist_geo, getSpeedKmh()),
       walk_min: c.walk_min ?? (estimateWalkSec(c.dist_geo, getSpeedKmh()) / 60),
     }))
-    .sort((a,b) => Math.abs(a.walk_sec - T_sec) - Math.abs(b.walk_sec - T_sec));
+    .sort((a, b) => b.wait_score - a.wait_score || b.walk_sec - a.walk_sec);
 }
 
 function buildAlternativesPopup(playerIdx, currentCandidate, color) {
@@ -2039,7 +2043,6 @@ function exportVersion() {
       speedKmh:  getSpeedKmh(),
       minTime:    getMinTimeMinutes(),
       minSpacing: getMinSpacing(),
-      tolerance:  getTolerancePct() * 100,
       weights: {
         type:       parseInt(document.getElementById('wType').value),
         comfort:    parseInt(document.getElementById('wComfort').value),
@@ -2086,10 +2089,7 @@ async function importVersion(event) {
       document.getElementById('minSpacing').value = data.params.minSpacing;
       document.getElementById('minSpacingVal').textContent = data.params.minSpacing;
     }
-    if (data.params.tolerance != null) {
-      document.getElementById('tolerance').value = data.params.tolerance;
-      document.getElementById('toleranceVal').textContent = data.params.tolerance;
-    }
+    // Le champ tolerance des anciens fichiers est ignoré (mode plafond)
     if (data.params.weights) {
       document.getElementById('wType').value = data.params.weights.type;
       document.getElementById('wTypeVal').textContent = data.params.weights.type;
