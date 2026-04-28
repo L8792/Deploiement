@@ -197,6 +197,43 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
 .time-real { color:var(--green); }
 .time-est  { color:var(--muted); font-style:italic; }
 
+/* HELP TOOLTIPS */
+.help-icon {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:13px; height:13px; border-radius:50%; background:var(--border);
+  color:var(--muted); font-size:.55rem; font-weight:700; cursor:help;
+  margin-left:4px; position:relative; vertical-align:middle;
+  font-family:'DM Mono',monospace;
+}
+.help-icon:hover { background:var(--green); color:#fff; }
+.help-icon[data-tip]:hover::after {
+  content: attr(data-tip);
+  position:absolute; left:18px; top:50%; transform:translateY(-50%);
+  background:var(--text); color:#fff; padding:8px 10px; border-radius:4px;
+  font-size:.7rem; font-family:'DM Sans',sans-serif; font-weight:400;
+  white-space:normal; width:240px; line-height:1.4; letter-spacing:0;
+  text-transform:none; box-shadow:0 4px 12px rgba(0,0,0,.2); z-index:9999;
+  pointer-events:none;
+}
+.help-icon[data-tip]:hover::before {
+  content: ""; position:absolute; left:14px; top:50%; transform:translateY(-50%);
+  border:5px solid transparent; border-right-color:var(--text); z-index:9999;
+}
+
+/* PREVIEW MARKER */
+@keyframes preview-pulse {
+  from { opacity:0.55; transform:scale(1); }
+  to   { opacity:0.85; transform:scale(1.08); }
+}
+
+/* UNDO CONTROL */
+.undo-control button:not(:disabled):hover {
+  background:#e8f5ee !important; border-color:#1a6b3c !important;
+}
+.undo-control button:disabled {
+  opacity:0.4; cursor:not-allowed;
+}
+
 /* TOGGLE SWITCH */
 .toggle-switch { position:relative; display:inline-block; width:32px; height:18px; }
 .toggle-switch input { opacity:0; width:0; height:0; }
@@ -224,7 +261,7 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
         <div class="section-title">Point central</div>
         <div class="address-row">
           <div class="field">
-            <label>Adresse</label>
+            <label>Adresse<span class="help-icon" data-tip="Point de départ commun. Tape une adresse, un lieu, ou utilise la géolocalisation GPS (📍).">ⓘ</span></label>
             <input type="text" id="address" placeholder="Ex : Place Bellecour, Lyon" />
           </div>
           <button class="btn-geolocate" onclick="geolocateMe()" title="Ma position GPS">📍</button>
@@ -236,7 +273,7 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
         <div class="section-title">Paramètres</div>
         <div class="range-row">
           <div class="field">
-            <label>Joueurs</label>
+            <label>Joueurs<span class="help-icon" data-tip="Nombre de positions à générer autour du point central, réparties dans des secteurs équidistants.">ⓘ</span></label>
             <input type="range" id="nPlayers" min="2" max="20" value="5"
               oninput="document.getElementById('nVal').textContent=this.value">
             <div class="range-val">
@@ -244,18 +281,48 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
             </div>
           </div>
           <div class="field">
-            <label>Temps cible</label>
+            <label>Temps cible<span class="help-icon" data-tip="Durée de marche visée pour chaque joueur depuis le point central. C'est l'objectif principal de l'algorithme.">ⓘ</span></label>
             <input type="range" id="tMinutes" min="2" max="30" value="10"
-              oninput="document.getElementById('tVal').textContent=this.value">
+              oninput="onTargetTimeInput(this.value)">
             <div class="range-val">
               <strong id="tVal">10</strong><small>min</small>
             </div>
           </div>
         </div>
 
+        <!-- FEATURE 2 : Temps minimum d'arrivée -->
+        <div class="field" style="margin-top:10px;">
+          <label>Temps minimum d'arrivée<span class="help-icon" data-tip="Aucun joueur ne sera placé en deçà de ce temps de marche. Mettre 0 pour désactiver.">ⓘ</span></label>
+          <input type="range" id="tMinMinutes" min="0" max="29" step="1" value="0"
+            oninput="onMinTimeInput(this.value)">
+          <div class="range-val">
+            <strong id="tMinVal">0</strong><small>min (0 = pas de minimum)</small>
+          </div>
+        </div>
+
+        <!-- FEATURE 3 : Tolérance temps de trajet -->
+        <div class="field" style="margin-top:10px;">
+          <label>Tolérance temps de trajet<span class="help-icon" data-tip="Marge acceptée autour du temps cible. Ex : tolérance 20% à 10min = points entre 8 et 12min acceptés.">ⓘ</span></label>
+          <input type="range" id="tolerance" min="0" max="50" step="5" value="20"
+            oninput="document.getElementById('toleranceVal').textContent=this.value">
+          <div class="range-val">
+            <strong id="toleranceVal">20</strong><small>% du temps cible</small>
+          </div>
+        </div>
+
+        <!-- FEATURE 1 : Distance min entre joueurs -->
+        <div class="field" style="margin-top:10px;">
+          <label>Distance min entre joueurs<span class="help-icon" data-tip="Distance minimale à vol d'oiseau entre deux joueurs sélectionnés. Évite que deux joueurs finissent côte à côte.">ⓘ</span></label>
+          <input type="range" id="minSpacing" min="0" max="500" step="10" value="0"
+            oninput="document.getElementById('minSpacingVal').textContent=this.value">
+          <div class="range-val">
+            <strong id="minSpacingVal">0</strong><small>m (vol d'oiseau)</small>
+          </div>
+        </div>
+
         <!-- Vitesse de marche configurable -->
         <div class="field" style="margin-top:10px;">
-          <label>Vitesse de marche</label>
+          <label>Vitesse de marche<span class="help-icon" data-tip="Allure de marche moyenne. 3.5 km/h = marche normale, 5 km/h = soutenue, 12 km/h = vélo. Ajuste la précision Valhalla.">ⓘ</span></label>
           <div style="display:flex; gap:4px; margin-bottom:6px; flex-wrap:wrap;">
             <button class="btn-small" onclick="setSpeed(2.5)">🐢 2.5</button>
             <button class="btn-small active" id="speedPreset35" onclick="setSpeed(3.5)">🚶 3.5</button>
@@ -272,21 +339,21 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
         <!-- Mode isochrone toggle -->
         <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;">
           <label style="font-size:.68rem; font-weight:500; color:var(--muted); letter-spacing:.05em; text-transform:uppercase;">
-            Zone isochrone
+            Zone isochrone<span class="help-icon" data-tip="Active le calcul d'une zone réelle accessible en X minutes via Valhalla (moteur de routage piéton). Plus précis qu'un cercle, prend en compte les vraies rues.">ⓘ</span>
           </label>
           <div style="display:flex; gap:4px; align-items:center;">
             <label class="toggle-switch">
               <input type="checkbox" id="isochroneToggle" checked>
               <span class="toggle-slider"></span>
             </label>
-            <span id="isoBadge" class="iso-badge active">Valhalla</span>
+            <span id="isoBadge" class="iso-badge active" title="Valhalla est un moteur de routage piéton open-source qui calcule les vrais chemins (rues, escaliers, passages piétons).">Valhalla</span>
           </div>
         </div>
       </div>
 
       <!-- Poids de scoring -->
       <div class="section">
-        <div class="section-title">Pondération du score</div>
+        <div class="section-title">Pondération du score<span class="help-icon" data-tip="Chaque candidat reçoit un score 0-10 combinant 3 critères. Ajuste les curseurs pour favoriser un critère.">ⓘ</span></div>
         <div style="display:flex; gap:6px; margin-bottom:8px;">
           <button class="btn-small active" id="preset-balanced" onclick="applyPreset('balanced')">⚖️ Équilibré</button>
           <button class="btn-small" id="preset-comfort" onclick="applyPreset('comfort')">🛋 Confort</button>
@@ -294,19 +361,19 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
         </div>
         <div class="weights-row">
           <div class="weight-field">
-            <label>Type</label>
+            <label>Type<span class="help-icon" data-tip="Poids du type de lieu (parc=9, café=8, banc=5...). Plus le poids est élevé, plus le type prime.">ⓘ</span></label>
             <input type="range" id="wType" min="0" max="10" value="5" step="1"
               oninput="document.getElementById('wTypeVal').textContent=this.value">
             <div class="wval" id="wTypeVal">5</div>
           </div>
           <div class="weight-field">
-            <label>Confort</label>
+            <label>Confort<span class="help-icon" data-tip="Poids du confort : abrité, banc, éclairage, surface dure, accès libre, gratuit.">ⓘ</span></label>
             <input type="range" id="wComfort" min="0" max="10" value="3" step="1"
               oninput="document.getElementById('wComfortVal').textContent=this.value">
             <div class="wval" id="wComfortVal">3</div>
           </div>
           <div class="weight-field">
-            <label>Discrétion</label>
+            <label>Discrétion<span class="help-icon" data-tip="Poids de la discrétion : couvert, arboré, peu fréquenté. Pénalise les belvédères, marchés, grandes places.">ⓘ</span></label>
             <input type="range" id="wDiscretion" min="0" max="10" value="2" step="1"
               oninput="document.getElementById('wDiscretionVal').textContent=this.value">
             <div class="wval" id="wDiscretionVal">2</div>
@@ -344,6 +411,32 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
         </div>
       </div>
 
+      <!-- FEATURE 6 : Section À propos repliable -->
+      <div class="section">
+        <div class="section-title" style="cursor:pointer; user-select:none;" onclick="toggleAbout()">
+          À propos · Aide <span id="aboutCaret">▾</span>
+        </div>
+        <div id="aboutContent" style="display:none; font-size:.72rem; line-height:1.5; color:var(--muted);">
+          <p style="margin-bottom:8px;"><b style="color:var(--text);">Comment ça marche ?</b><br>
+          L'outil place N joueurs autour d'un point central, à T minutes de marche, dans des secteurs angulaires distincts pour qu'ils soient bien répartis.</p>
+          <p style="margin-bottom:8px;"><b style="color:var(--text);">Valhalla</b><br>
+          Moteur de routage piéton open-source qui calcule les vrais temps de marche en suivant les rues, escaliers, passages piétons. Bien plus précis qu'une estimation à vol d'oiseau.</p>
+          <p style="margin-bottom:8px;"><b style="color:var(--text);">Isochrone</b><br>
+          Polygone qui représente la zone réellement atteignable en X minutes. Sert à filtrer les candidats au lieu d'utiliser un simple cercle.</p>
+          <p style="margin-bottom:8px;"><b style="color:var(--text);">Score composite</b><br>
+          Chaque lieu reçoit un score 0-10 combinant : type de lieu (parcs ≫ bancs), confort (abri/bancs/éclairage), discrétion (couvert/calme).</p>
+          <p style="margin-bottom:8px;"><b style="color:var(--text);">Secteurs adaptatifs</b><br>
+          L'algo regroupe les candidats par direction angulaire (k-means) pour garantir que les joueurs soient répartis dans toutes les directions.</p>
+          <p style="margin-bottom:8px;"><b style="color:var(--text);">Tolérance & marge</b><br>
+          Une tolérance de 20% à 10min signifie que des points entre 8 et 12min sont acceptés. Augmente la tolérance si peu de candidats sont trouvés.</p>
+          <p style="margin-bottom:8px;"><b style="color:var(--text);">Raccourcis</b><br>
+          <code>Ctrl/Cmd+Z</code> : annuler le dernier déplacement<br>
+          <code>Échap</code> : annuler une prévisualisation</p>
+        </div>
+      </div>
+
+      <!-- FEATURE 5 : Input file caché pour import -->
+      <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importVersion(event)">
     </div>
 
     <div class="panel-footer">
@@ -371,6 +464,13 @@ window.D = {
   markers:       [],
   lines:         [],
   isochronePoly: null,
+  // FEATURE 4 : Undo
+  lastMove:      null,   // { playerIdx, prevCandidate, prevLineCoords }
+  // FEATURE 7 : Preview
+  previewMarker: null,
+  previewLine:   null,
+  previewLink:   null,
+  previewState:  null,   // { playerIdx, candidate, altKey, stateKey, originalCandidate }
   cache: {
     overpass: new Map(),
     osrm:     new Map(),
@@ -510,6 +610,43 @@ function getSpeedKmh() {
 }
 function getOsrmProfile() {
   return getSpeedKmh() > 6 ? 'bicycle' : 'foot';
+}
+
+// ─────────────────────────────────────────────────────────
+// FEATURE 1, 2, 3 : nouveaux getters
+// ─────────────────────────────────────────────────────────
+function getMinTimeMinutes() {
+  return parseInt(document.getElementById('tMinMinutes').value) || 0;
+}
+function getMinSpacing() {
+  return parseInt(document.getElementById('minSpacing').value) || 0;
+}
+function getTolerancePct() {
+  return (parseInt(document.getElementById('tolerance').value) || 20) / 100;
+}
+
+// FEATURE 2 : auto-ajustement du slider min vs cible
+function onTargetTimeInput(val) {
+  document.getElementById('tVal').textContent = val;
+  const minSlider = document.getElementById('tMinMinutes');
+  const targetVal = parseInt(val);
+  if (parseInt(minSlider.value) >= targetVal) {
+    minSlider.value = Math.max(0, targetVal - 1);
+    document.getElementById('tMinVal').textContent = minSlider.value;
+  }
+  minSlider.max = Math.max(0, targetVal - 1);
+}
+function onMinTimeInput(val) {
+  document.getElementById('tMinVal').textContent = val;
+}
+
+// FEATURE 6 : toggle section À propos
+function toggleAbout() {
+  const c = document.getElementById('aboutContent');
+  const caret = document.getElementById('aboutCaret');
+  const open = c.style.display === 'none';
+  c.style.display = open ? 'block' : 'none';
+  if (caret) caret.textContent = open ? '▴' : '▾';
 }
 
 // Facteur correction urbain (pour estimation rapide avant appel API)
@@ -1160,7 +1297,11 @@ async function run() {
     setStep('filter','running');
     setStatus('Filtrage et scoring…','running');
 
-    const rMin = T_sec * speedMs * 0.4;
+    // FEATURE 2 : utiliser tMinSec si l'utilisateur l'a défini
+    const tMinSec = getMinTimeMinutes() * 60;
+    const rMin = tMinSec > 0
+      ? tMinSec * speedMs * 0.9      // marge réduite si min explicite
+      : T_sec * speedMs * 0.4;       // ancien comportement par défaut
     const rMax = T_sec * speedMs * 1.8;
 
     const candidates = [];
@@ -1234,29 +1375,47 @@ async function run() {
     setStep('select','running');
     setStatus('Sélection optimale…','running');
 
-    const margin   = Math.max(90, T_sec * 0.2);
+    // FEATURE 3 : tolérance configurable (plancher abaissé à 60s)
+    const tolerancePct = getTolerancePct();
+    const margin = Math.max(60, T_sec * tolerancePct);
+    // FEATURE 1 : distance minimale entre joueurs (vol d'oiseau)
+    const minSpacing = getMinSpacing();
     const selected = [];
+    let spacingViolations = 0;
 
     for (let i = 0; i < N; i++) {
       if (!sectors[i].length) continue;
       const sTimed = sectors[i].filter(c => prePool.includes(c));
-      const valid  = sTimed.filter(c => c.walk_sec < 9999);
+      // FEATURE 2 : exclure les candidats sous le temps min
+      const valid  = sTimed.filter(c => c.walk_sec < 9999 && c.walk_sec >= tMinSec);
       if (!valid.length) continue;
       const inMargin = valid.filter(c => Math.abs(c.walk_sec - T_sec) <= margin);
       const pool     = inMargin.length ? inMargin : valid;
       pool.sort((a,b) => Math.abs(a.walk_sec-T_sec)-Math.abs(b.walk_sec-T_sec) || b.wait_score-a.wait_score);
-      selected.push(pool[0]);
+
+      // FEATURE 1 : recherche du premier candidat respectant la distance min
+      const respectsSpacing = (cand) =>
+        selected.every(s => haversine(s, cand) >= minSpacing);
+      const candidate = minSpacing > 0
+        ? (pool.find(respectsSpacing) || (spacingViolations++, pool[0]))
+        : pool[0];
+      selected.push(candidate);
     }
 
     if (selected.length < N) {
       const already = new Set(selected);
-      const rem = prePool.filter(c => !already.has(c) && c.walk_sec < 9999)
-        .sort((a,b) => Math.abs(a.walk_sec-T_sec) - Math.abs(b.walk_sec-T_sec));
+      const rem = prePool.filter(c =>
+        !already.has(c) && c.walk_sec < 9999 && c.walk_sec >= tMinSec
+      ).sort((a,b) => Math.abs(a.walk_sec-T_sec) - Math.abs(b.walk_sec-T_sec));
       selected.push(...greedyDisperse(rem, N - selected.length));
     }
 
-    if (!selected.length) throw new Error('Aucun résultat. Essaie d\'autres types de lieux.');
-    setStep('select','done', `${selected.length} positions sélectionnées`);
+    if (!selected.length) throw new Error('Aucun résultat. Essaie d\'autres types de lieux ou réduis le temps minimum.');
+    let selectMsg = `${selected.length} positions sélectionnées`;
+    if (spacingViolations > 0) {
+      selectMsg += ` · ⚠ ${spacingViolations} violation(s) distance min`;
+    }
+    setStep('select','done', selectMsg);
     D.selected = selected;
 
     // ── ÉTAPE 8 : DÉNIVELÉ ───────────────────────────────
@@ -1321,24 +1480,46 @@ function renderResults(selected, center, N, T, T_sec) {
       dists.push(haversine(selected[i], selected[j]));
 
   document.getElementById('statsSection').style.display = '';
+  // FEATURE 3 : calculer la fenêtre effective
+  const _tolPct = getTolerancePct();
+  const _T_sec  = T * 60;
+  const _margin = Math.max(60, _T_sec * _tolPct);
+  const _winLow  = Math.max(0, (_T_sec - _margin) / 60);
+  const _winHigh = (_T_sec + _margin) / 60;
+  const _tMin    = getMinTimeMinutes();
+  const _spacing = getMinSpacing();
+
   document.getElementById('statsContent').innerHTML = `
     <div class="stat-row"><span>Temps moyen</span><b>${mean.toFixed(1)} min</b></div>
     <div class="stat-row"><span>Écart-type</span><b>${std.toFixed(2)} min</b></div>
     <div class="stat-row"><span>Min / Max</span><b>${Math.min(...wm).toFixed(1)} / ${Math.max(...wm).toFixed(1)} min</b></div>
+    <div class="stat-row"><span>Fenêtre acceptée</span><b>${_winLow.toFixed(1)}–${_winHigh.toFixed(1)} min</b></div>
+    ${_tMin > 0 ? `<div class="stat-row"><span>Temps min imposé</span><b>${_tMin} min</b></div>` : ''}
     <div class="stat-row"><span>Distance min inter-joueurs</span><b>${Math.round(Math.min(...dists))} m</b></div>
     <div class="stat-row"><span>Distance max inter-joueurs</span><b>${Math.round(Math.max(...dists))} m</b></div>
+    ${_spacing > 0 ? `<div class="stat-row"><span>Distance min imposée</span><b>${_spacing} m</b></div>` : ''}
     <div class="stat-row"><span>Moteur de routage</span><b>Valhalla ✓</b></div>
-    <div style="margin-top:10px; display:flex; gap:6px;">
-      <button onclick="exportCSV()" style="flex:1;padding:7px;border:1px solid #1a6b3c;
-        background:#e8f5ee;color:#1a6b3c;font-family:'DM Sans',sans-serif;font-size:.75rem;
+    <div style="margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+      <button onclick="exportCSV()" style="padding:7px;border:1px solid #1a6b3c;
+        background:#e8f5ee;color:#1a6b3c;font-family:'DM Sans',sans-serif;font-size:.72rem;
         font-weight:600;cursor:pointer;border-radius:2px;"
         onmouseover="this.style.background='#1a6b3c';this.style.color='#fff';"
         onmouseout="this.style.background='#e8f5ee';this.style.color='#1a6b3c';">↓ CSV</button>
-      <button onclick="exportGPX()" style="flex:1;padding:7px;border:1px solid #2d6fa3;
-        background:#e8f0fa;color:#2d6fa3;font-family:'DM Sans',sans-serif;font-size:.75rem;
+      <button onclick="exportGPX()" style="padding:7px;border:1px solid #2d6fa3;
+        background:#e8f0fa;color:#2d6fa3;font-family:'DM Sans',sans-serif;font-size:.72rem;
         font-weight:600;cursor:pointer;border-radius:2px;"
         onmouseover="this.style.background='#2d6fa3';this.style.color='#fff';"
         onmouseout="this.style.background='#e8f0fa';this.style.color='#2d6fa3';">↓ GPX</button>
+      <button onclick="exportVersion()" style="padding:7px;border:1px solid #8b3ab8;
+        background:#f3eafa;color:#8b3ab8;font-family:'DM Sans',sans-serif;font-size:.72rem;
+        font-weight:600;cursor:pointer;border-radius:2px;"
+        onmouseover="this.style.background='#8b3ab8';this.style.color='#fff';"
+        onmouseout="this.style.background='#f3eafa';this.style.color='#8b3ab8';">💾 Sauver version</button>
+      <button onclick="document.getElementById('importFile').click()" style="padding:7px;border:1px solid #e07b2a;
+        background:#fdf2e8;color:#e07b2a;font-family:'DM Sans',sans-serif;font-size:.72rem;
+        font-weight:600;cursor:pointer;border-radius:2px;"
+        onmouseover="this.style.background='#e07b2a';this.style.color='#fff';"
+        onmouseout="this.style.background='#fdf2e8';this.style.color='#e07b2a';">📂 Charger version</button>
     </div>`;
 
   // Secteurs visuels sur la carte
@@ -1393,6 +1574,9 @@ function renderResults(selected, center, N, T, T_sec) {
     });
 
     marker.on('dragend', async e => {
+      // FEATURE 4 : sauvegarde l'état précédent pour undo
+      saveLastMove(i);
+
       const ll = e.target.getLatLng();
       const newName = await reverseGeocode(ll.lat, ll.lng);
       // Utilise Valhalla pour le calcul à la volée
@@ -1404,7 +1588,8 @@ function renderResults(selected, center, N, T, T_sec) {
       const updPop = buildAlternativesPopup(i, D.selected[i], color);
       marker.setPopupContent(updPop);
       marker.openPopup();
-      document.getElementById('result-name-'+i)?.setAttribute('textContent', newName);
+      const nameEl = document.getElementById('result-name-'+i);
+      if (nameEl) nameEl.textContent = newName;
       const metaEl = document.getElementById('result-meta-'+i);
       if (metaEl) metaEl.innerHTML = `<span>📍 déplacé</span><span class="time-real">⏱ ${walkM.toFixed(1)} min</span>`;
       // Retrace la route via Valhalla
@@ -1503,7 +1688,7 @@ function buildAlternativesPopup(playerIdx, currentCandidate, color) {
       const altKey   = `alt_${playerIdx}_${D.geoFiltered.indexOf(alt)}`;
       D.altRegistry[altKey] = alt;
       const timeNote = alt.walkTimeIsReal ? alt.walk_min.toFixed(1) : `~${alt.walk_min.toFixed(1)}`;
-      return `<div onclick="swapCandidateFull(${playerIdx}, '${altKey}', '${stateKey}')"
+      return `<div onclick="previewAlternative(${playerIdx}, '${altKey}', '${stateKey}')"
         style="padding:6px 8px;border:1px solid #dde8e2;border-radius:3px;cursor:pointer;
                margin-bottom:4px;background:#fff;transition:background .12s;"
         onmouseover="this.style.background='#e8f5ee'" onmouseout="this.style.background='#fff'">
@@ -1555,6 +1740,9 @@ function buildAlternativesPopup(playerIdx, currentCandidate, color) {
 async function swapCandidateFull(playerIdx, altKey, stateKey) {
   const newC = D.altRegistry[altKey];
   if (!newC) return;
+
+  // FEATURE 4 : sauvegarde l'état précédent pour undo
+  saveLastMove(playerIdx);
 
   // Calcul Valhalla si pas encore fait
   if (!newC.walkTimeIsReal) {
@@ -1632,6 +1820,332 @@ function exportGPX() {
   ${waypoints}
 </gpx>`;
   downloadBlob(gpx, 'deploiement.gpx', 'application/gpx+xml');
+}
+
+// ═══════════════════════════════════════════════════════════
+// FEATURE 4 — UNDO du dernier déplacement
+// ═══════════════════════════════════════════════════════════
+function saveLastMove(playerIdx) {
+  if (!D.selected[playerIdx] || !D.lines[playerIdx]) return;
+  D.lastMove = {
+    playerIdx,
+    prevCandidate: { ...D.selected[playerIdx] },
+    prevLineCoords: D.lines[playerIdx].getLatLngs().map(ll => [ll.lat, ll.lng])
+  };
+  const btn = document.getElementById('btnUndo');
+  if (btn) btn.disabled = false;
+}
+
+async function undoLastMove() {
+  if (!D.lastMove) return;
+  const { playerIdx, prevCandidate, prevLineCoords } = D.lastMove;
+  D.selected[playerIdx] = prevCandidate;
+
+  // Repositionner le marqueur
+  if (D.markers[playerIdx]) {
+    D.markers[playerIdx].setLatLng([prevCandidate.lat, prevCandidate.lon]);
+    const color = COLORS[playerIdx % COLORS.length];
+    D.markers[playerIdx].setPopupContent(buildAlternativesPopup(playerIdx, prevCandidate, color));
+  }
+  // Restaurer le tracé
+  if (D.lines[playerIdx] && prevLineCoords) {
+    D.lines[playerIdx].setLatLngs(prevLineCoords);
+  }
+  // Mettre à jour le panneau résultats
+  const ptDef = PLACE_TYPES.find(pt => pt.id === prevCandidate.type);
+  const icon  = ptDef ? ptDef.icon : '📍';
+  const walkM = prevCandidate.walk_min_adj || prevCandidate.walk_min || 0;
+  const tLab  = prevCandidate.walkTimeIsReal
+    ? `<span class="time-real">⏱ ${walkM.toFixed(1)} min</span>`
+    : `<span class="time-est">⏱ ~${walkM.toFixed(1)} min</span>`;
+  const nameEl = document.getElementById('result-name-'+playerIdx);
+  const metaEl = document.getElementById('result-meta-'+playerIdx);
+  if (nameEl) nameEl.textContent = prevCandidate.name;
+  if (metaEl) metaEl.innerHTML   = `<span>${icon} ${prevCandidate.type}</span>${tLab}`;
+
+  D.lastMove = null;
+  const btn = document.getElementById('btnUndo');
+  if (btn) btn.disabled = true;
+  setStatus('Dernier déplacement annulé ✓','ok');
+}
+
+// Bouton flottant undo
+const undoControl = L.control({ position: 'topleft' });
+undoControl.onAdd = function() {
+  const div = L.DomUtil.create('div', 'undo-control');
+  div.innerHTML = `
+    <button id="btnUndo" disabled
+      style="background:#fff;border:1px solid #dde8e2;width:34px;height:34px;
+             border-radius:4px;cursor:pointer;font-size:18px;
+             box-shadow:0 1px 4px rgba(0,0,0,.15);
+             display:flex;align-items:center;justify-content:center;
+             transition:all .15s;color:#1a6b3c;font-weight:700;"
+      title="Annuler le dernier déplacement (Ctrl+Z)">↶</button>`;
+  L.DomEvent.disableClickPropagation(div);
+  div.querySelector('#btnUndo').onclick = undoLastMove;
+  return div;
+};
+undoControl.addTo(map);
+
+// Raccourci clavier global
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && D.lastMove) {
+    e.preventDefault();
+    undoLastMove();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// FEATURE 7 — PRÉVISUALISATION des alternatives
+// ═══════════════════════════════════════════════════════════
+async function previewAlternative(playerIdx, altKey, stateKey) {
+  const alt = D.altRegistry[altKey];
+  if (!alt) return;
+
+  // Nettoyer toute prévisualisation précédente
+  clearPreview();
+
+  D.previewState = {
+    playerIdx,
+    candidate: alt,
+    altKey,
+    stateKey,
+    originalCandidate: D.selected[playerIdx],
+  };
+
+  const color = COLORS[playerIdx % COLORS.length];
+
+  // Ligne fine reliant le point officiel et le point fantôme (visualise le déplacement)
+  D.previewLink = L.polyline([
+    [D.selected[playerIdx].lat, D.selected[playerIdx].lon],
+    [alt.lat, alt.lon]
+  ], { color:'#c8970a', weight:1.5, dashArray:'2 4', opacity:0.6 }).addTo(map);
+
+  // Marqueur fantôme
+  D.previewMarker = L.marker([alt.lat, alt.lon], {
+    icon: L.divIcon({ className:'',
+      html:`<div style="width:30px;height:30px;border-radius:5px;background:${color};
+            color:#fff;display:flex;align-items:center;justify-content:center;
+            font-family:'DM Sans',sans-serif;font-weight:700;font-size:13px;
+            border:2px dashed #fff;
+            box-shadow:0 2px 8px rgba(0,0,0,.3);
+            opacity:0.7;animation:preview-pulse 1.2s ease-in-out infinite alternate;">
+            ${playerIdx+1}?</div>`,
+      iconSize:[30,30], iconAnchor:[15,15] })
+  }).addTo(map);
+
+  // Tracé fantôme : pointillé
+  D.previewLine = L.polyline([[D.center.lat, D.center.lon],[alt.lat, alt.lon]], {
+    color, opacity:0.55, weight:3, dashArray:'8 6'
+  }).addTo(map);
+
+  // Charger l'itinéraire Valhalla en arrière-plan
+  getWalkRoute(D.center, alt).then(coords => {
+    if (D.previewLine) D.previewLine.setLatLngs(coords);
+  });
+
+  // Calculer le temps réel si pas déjà fait
+  if (!alt.walkTimeIsReal) {
+    const sec = await calculateSingleWalkTime(D.center, alt);
+    if (sec != null) {
+      alt.walk_sec = sec;
+      alt.walk_min = sec / 60;
+      alt.walkTimeIsReal = true;
+    }
+  }
+
+  showPreviewPopup(playerIdx, alt);
+}
+
+function showPreviewPopup(playerIdx, alt) {
+  if (!D.previewMarker || !D.previewState) return;
+  const ptDef = PLACE_TYPES.find(pt => pt.id === alt.type);
+  const icon  = ptDef ? ptDef.icon : '📍';
+  const orig  = D.previewState.originalCandidate;
+  const tNew  = alt.walkTimeIsReal ? alt.walk_min.toFixed(1) : `~${alt.walk_min.toFixed(1)}`;
+  const tOld  = (orig.walk_min_adj || orig.walk_min).toFixed(1);
+
+  const popupHtml = `<div style="min-width:230px;font-family:'DM Sans',sans-serif;">
+    <div style="background:#fff8e1;border:1px solid #c8970a;color:#8b6f0a;
+                padding:6px 8px;border-radius:3px;font-size:11px;font-weight:600;
+                margin-bottom:8px;text-align:center;letter-spacing:.06em;">
+      👁 PRÉVISUALISATION
+    </div>
+    <div style="font-weight:700;font-size:13px;color:#1a2e24;">${icon} ${alt.name}</div>
+    <div style="margin-top:5px;font-size:11px;">
+      <div>⏱ <b>${tNew} min</b> à pied <span style="color:#aaa;">(actuel : ${tOld})</span></div>
+      <div style="color:#1a6b3c;">★ ${alt.wait_score}/10</div>
+    </div>
+    <div style="display:flex; gap:5px; margin-top:10px;">
+      <button onclick="confirmPreview()"
+        style="flex:1;padding:7px;background:#1a6b3c;color:#fff;border:none;
+               border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;
+               font-family:'DM Sans',sans-serif;">✓ Adopter</button>
+      <button onclick="clearPreview()"
+        style="flex:1;padding:7px;background:#fff;color:#7a9e8a;
+               border:1px solid #dde8e2;border-radius:3px;font-size:11px;
+               cursor:pointer;font-family:'DM Sans',sans-serif;">✗ Annuler</button>
+    </div>
+    <div style="margin-top:6px;font-size:9px;color:#bbb;text-align:center;">
+      Échap pour annuler
+    </div>
+  </div>`;
+
+  D.previewMarker.bindPopup(popupHtml, { maxWidth: 270 }).openPopup();
+}
+
+function confirmPreview() {
+  if (!D.previewState) return;
+  const { playerIdx, altKey, stateKey } = D.previewState;
+  clearPreview();
+  swapCandidateFull(playerIdx, altKey, stateKey);
+}
+
+function clearPreview() {
+  if (D.previewMarker) { map.removeLayer(D.previewMarker); D.previewMarker = null; }
+  if (D.previewLine)   { map.removeLayer(D.previewLine);   D.previewLine = null; }
+  if (D.previewLink)   { map.removeLayer(D.previewLink);   D.previewLink = null; }
+  D.previewState = null;
+}
+
+// Échap pour annuler une prévisualisation
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && D.previewState) {
+    clearPreview();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// FEATURE 5 — SAUVEGARDE / CHARGEMENT de versions JSON
+// ═══════════════════════════════════════════════════════════
+function exportVersion() {
+  if (!D.selected.length || !D.center) {
+    setStatus('Rien à sauvegarder. Lance un déploiement d\'abord.','error');
+    return;
+  }
+  const defaultLabel = `${(D.center.display || '').split(',')[0]} - ${D.N} joueurs - ${D.T}min`;
+  const label = prompt('Nom de cette version :', defaultLabel);
+  if (label === null) return;
+
+  const data = {
+    version: '1.0',
+    savedAt: new Date().toISOString(),
+    label,
+    params: {
+      address:   document.getElementById('address').value,
+      center:    D.center,
+      N:         D.N,
+      T:         D.T,
+      speedKmh:  getSpeedKmh(),
+      minTime:    getMinTimeMinutes(),
+      minSpacing: getMinSpacing(),
+      tolerance:  getTolerancePct() * 100,
+      weights: {
+        type:       parseInt(document.getElementById('wType').value),
+        comfort:    parseInt(document.getElementById('wComfort').value),
+        discretion: parseInt(document.getElementById('wDiscretion').value),
+      },
+      activeTypes: [...activeTypes],
+      isochroneEnabled: document.getElementById('isochroneToggle').checked,
+    },
+    selected:    D.selected,
+    geoFiltered: D.geoFiltered,  // permet de garder les alternatives au reload
+  };
+  const safeLabel = label.replace(/[^a-z0-9-_]/gi, '_').slice(0, 50);
+  downloadBlob(JSON.stringify(data, null, 2),
+    `deploiement_${safeLabel}.json`, 'application/json');
+  setStatus('Version sauvegardée ✓','ok');
+}
+
+async function importVersion(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!data.version || !data.params || !data.selected) {
+      throw new Error('Fichier invalide');
+    }
+
+    // Restaurer paramètres UI
+    document.getElementById('address').value     = data.params.address || '';
+    document.getElementById('nPlayers').value    = data.params.N;
+    document.getElementById('nVal').textContent  = data.params.N;
+    document.getElementById('tMinutes').value    = data.params.T;
+    document.getElementById('tVal').textContent  = data.params.T;
+    document.getElementById('walkSpeed').value   = data.params.speedKmh;
+    document.getElementById('speedVal').textContent = data.params.speedKmh;
+
+    if (data.params.minTime != null) {
+      document.getElementById('tMinMinutes').value = data.params.minTime;
+      document.getElementById('tMinVal').textContent = data.params.minTime;
+      // Ajuster max du slider min selon la cible
+      document.getElementById('tMinMinutes').max = Math.max(0, data.params.T - 1);
+    }
+    if (data.params.minSpacing != null) {
+      document.getElementById('minSpacing').value = data.params.minSpacing;
+      document.getElementById('minSpacingVal').textContent = data.params.minSpacing;
+    }
+    if (data.params.tolerance != null) {
+      document.getElementById('tolerance').value = data.params.tolerance;
+      document.getElementById('toleranceVal').textContent = data.params.tolerance;
+    }
+    if (data.params.weights) {
+      document.getElementById('wType').value = data.params.weights.type;
+      document.getElementById('wTypeVal').textContent = data.params.weights.type;
+      document.getElementById('wComfort').value = data.params.weights.comfort;
+      document.getElementById('wComfortVal').textContent = data.params.weights.comfort;
+      document.getElementById('wDiscretion').value = data.params.weights.discretion;
+      document.getElementById('wDiscretionVal').textContent = data.params.weights.discretion;
+    }
+    if (data.params.activeTypes) {
+      activeTypes.clear();
+      data.params.activeTypes.forEach(id => activeTypes.add(id));
+      buildPlaceGrid();
+    }
+    document.getElementById('isochroneToggle').checked = !!data.params.isochroneEnabled;
+
+    // Restaurer l'état applicatif
+    D.center      = data.params.center;
+    D.N           = data.params.N;
+    D.T           = data.params.T;
+    D.selected    = data.selected;
+    D.geoFiltered = data.geoFiltered || data.selected;
+    D.lastMove    = null;
+    clearPreview();
+
+    // Rebuild visuel
+    clearMap();
+    centerMarker = L.marker([D.center.lat, D.center.lon], {
+      icon: L.divIcon({ className:'',
+        html:`<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid #1a6b3c;box-shadow:0 0 10px rgba(26,107,60,.4);"></div>`,
+        iconSize:[18,18], iconAnchor:[9,9] })
+    }).addTo(map).bindPopup(`<b>Point central</b><br><small style="color:#7a9e8a;">${D.center.display || ''}</small>`);
+
+    renderResults(D.selected, D.center, D.N, D.T, D.T*60);
+
+    // Retracer les itinéraires Valhalla
+    for (let i = 0; i < D.selected.length; i++) {
+      (async (idx) => {
+        const coords = await getWalkRoute(D.center, D.selected[idx]);
+        if (D.lines[idx]) {
+          D.lines[idx].setLatLngs(coords);
+          D.lines[idx].setStyle({ dashArray: null, opacity: 0.4, weight: 2.5,
+            color: COLORS[idx % COLORS.length] });
+        }
+      })(i);
+    }
+
+    // Reset bouton undo
+    const btnUndo = document.getElementById('btnUndo');
+    if (btnUndo) btnUndo.disabled = true;
+
+    setStatus(`Version "${data.label}" chargée ✓`,'ok');
+  } catch(e) {
+    setStatus('Erreur import : ' + e.message,'error');
+    console.error(e);
+  }
+  event.target.value = '';
 }
 </script>
 </body>
