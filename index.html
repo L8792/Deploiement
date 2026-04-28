@@ -310,6 +310,7 @@ L.control.layers(
 ).addTo(map);
 
 let drawnLayers = [], centerMarker = null;
+let globalLines = [];  // lignes centre→joueur par index
 
 const COLORS = ["#1a6b3c","#e07b2a","#2d6fa3","#8b3ab8","#c0392b","#1a7a6e","#7d5a00","#1a4f7a","#5a3080","#8b2020"];
 const SECTOR_COLORS = ['#1a6b3c','#2d9e5f','#34c472','#7dcfa4','#b5e8ce'];
@@ -426,8 +427,8 @@ async function run() {
       .bindPopup(`<b>Point central</b><br><small style="color:#7a9e8a;">${center.display}</small>`);
 
     // 2 — Overpass
-    const T_sec=T*60, SPEED=80/60;
-    const rM=T*80*1.6, dLat=rM/111320, dLon=rM/(111320*Math.cos(center.lat*Math.PI/180));
+    const T_sec=T*60, SPEED=3500/60;  // 3.5 km/h piéton
+    const rM=T*(3500/60)*1.6, dLat=rM/111320, dLon=rM/(111320*Math.cos(center.lat*Math.PI/180));  // 3.5 km/h
     const bbox=`${center.lat-dLat},${center.lon-dLon},${center.lat+dLat},${center.lon+dLon}`;
 
     setStatus(`Recherche des lieux (${activeTypes.size} types actifs)…`,'running');
@@ -506,11 +507,12 @@ async function run() {
     if(!selected.length) throw new Error('Aucun résultat. Essaie d\'autres types de lieux.');
 
     // Store globals for swap/drag/export
-    globalSelected = selected;
-    globalPrePool  = prePool;
-    globalCenter   = center;
-    globalN        = N;
-    globalT        = T;
+    globalSelected    = selected;
+    globalPrePool     = prePool;
+    globalGeoFiltered = geoFiltered;  // tous les candidats — alternatives infinies
+    globalCenter      = center;
+    globalN           = N;
+    globalT           = T;
 
     // Build sector->candidates map for alternatives
     const sectorMap = Array.from({length:N}, (_,i) =>
@@ -527,6 +529,8 @@ async function run() {
 // RENDER
 // ═══════════════════════════════════════════════
 function renderResults(selected,center,N,T,T_sec,sectorMap){
+  globalMarkers = [];
+  globalLines   = [];
   const wm=selected.map(p=>p.walk_min);
   const mean=wm.reduce((a,b)=>a+b,0)/wm.length;
   const std=Math.sqrt(wm.map(t=>(t-mean)**2).reduce((a,b)=>a+b,0)/wm.length);
@@ -552,7 +556,7 @@ function renderResults(selected,center,N,T,T_sec,sectorMap){
     </div>`;
 
   // Secteurs sur la carte
-  const refR=T*80, sectorSize=360/N;
+  const refR=T*(3500/60), sectorSize=360/N;  // 3.5 km/h
   for(let i=0;i<N;i++){
     const a0=(i*360/N-90)*Math.PI/180, a1=((i+1)*360/N-90)*Math.PI/180;
     const pts=[[center.lat,center.lon]];
@@ -647,6 +651,8 @@ function renderResults(selected,center,N,T,T_sec,sectorMap){
     });
 
     drawnLayers.push(marker, line);
+    globalMarkers[i] = marker;
+    globalLines[i]   = line;
 
     // List item
     const item = document.createElement('div');
@@ -677,11 +683,13 @@ document.getElementById('address').addEventListener('keydown',e=>{if(e.key==='En
 // ═══════════════════════════════════════════════
 // GLOBAL STATE for alternatives + drag + export
 // ═══════════════════════════════════════════════
-let globalSelected = [];
-let globalPrePool  = [];
-let globalCenter   = null;
-let globalN        = 5;
-let globalT        = 10;
+let globalSelected    = [];
+let globalPrePool     = [];
+let globalGeoFiltered = [];  // tous les candidats filtrés géo — base des alternatives infinies
+let globalCenter      = null;
+let globalN           = 5;
+let globalT           = 10;
+let globalMarkers     = [];  // référence aux markers Leaflet par index joueur
 
 // ═══════════════════════════════════════════════
 // REVERSE GEOCODE
@@ -697,35 +705,68 @@ async function reverseGeocode(lat, lon) {
 }
 
 // ═══════════════════════════════════════════════
-// ALTERNATIVES POPUP
+// ALTERNATIVES POPUP — infinies depuis geoFiltered
 // ═══════════════════════════════════════════════
-function buildAlternativesPopup(playerIdx, currentCandidate, sectorCandidates, marker, color) {
-  const alts = sectorCandidates
-    .filter(c => c !== currentCandidate && c.walk_sec < 9999)
-    .sort((a,b) => Math.abs(a.walk_sec - globalT*60) - Math.abs(b.walk_sec - globalT*60))
-    .slice(0, 4);
+
+// Récupère toutes les alternatives d'un secteur pour un candidat donné
+// Source : globalGeoFiltered (tous candidats géo-filtrés) + walk_sec si calculé
+function getSectorAlternatives(playerIdx, currentCandidate) {
+  const sectorSize = 360 / globalN;
+  const T_sec = globalT * 60;
+  // Secteur du candidat actuel
+  const brg = currentCandidate.bearing ?? bearing(globalCenter, currentCandidate);
+  const sectorIdx = Math.floor(brg / sectorSize) % globalN;
+
+  // Tous les candidats du même secteur dans geoFiltered, sauf le courant
+  return globalGeoFiltered
+    .filter(c => {
+      if (c === currentCandidate) return false;
+      const cBrg = c.bearing ?? bearing(globalCenter, c);
+      return Math.floor(cBrg / sectorSize) % globalN === sectorIdx;
+    })
+    .map(c => ({
+      ...c,
+      // Utiliser walk_sec si déjà calculé par OSRM, sinon estimer
+      walk_sec: c.walk_sec ?? (c.dist_geo / (3500/60)),  // 3.5 km/h
+      walk_min: c.walk_min ?? (c.dist_geo / (3500/60) / 60),  // 3.5 km/h
+    }))
+    .sort((a,b) => Math.abs(a.walk_sec - T_sec) - Math.abs(b.walk_sec - T_sec));
+}
+
+function buildAlternativesPopup(playerIdx, currentCandidate, _unused, marker, color) {
+  const MAX_ALTS = 5;
+  const alts     = getSectorAlternatives(playerIdx, currentCandidate).slice(0, MAX_ALTS);
+  const totalAlts = alts.length;
 
   const ptDef = PLACE_TYPES.find(pt => pt.id === currentCandidate.type);
-  const icon  = ptDef ? ptDef.icon : '📍';
+  const icon  = ptDef ? ptDef.icon : (currentCandidate.type === 'custom' ? '📍' : '📍');
   const stars = '★'.repeat(Math.min(currentCandidate.wait_score,10)) + '☆'.repeat(Math.max(0,10-currentCandidate.wait_score));
 
-  const bonusItems = currentCandidate.bonuses.map(b =>
-    `<div style="padding:3px 0;border-bottom:1px solid #eee;font-size:11px;">${b}</div>`).join('');
-  const bonusSection = currentCandidate.bonuses.length ? `
-    <div style="margin-top:7px;padding-top:5px;border-top:2px solid #1a6b3c;">
-      <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#7a9e8a;margin-bottom:3px;">Points bonus</div>
+  const bonusItems = (currentCandidate.bonuses||[]).map(b =>
+    `<div style="padding:2px 0;border-bottom:1px solid #f0f0f0;font-size:11px;">${b}</div>`).join('');
+  const bonusSection = (currentCandidate.bonuses||[]).length ? `
+    <div style="margin-top:6px;padding-top:5px;border-top:1.5px solid #1a6b3c;">
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#7a9e8a;margin-bottom:3px;">Bonus</div>
       ${bonusItems}
     </div>` : '';
 
+  // Enregistrer le candidat courant dans un index global accessible depuis onclick inline
+  if (!window._popupState) window._popupState = {};
+  const stateKey = `p${playerIdx}`;
+  window._popupState[stateKey] = { playerIdx, color, currentCandidate };
+
   let altsHtml = '';
-  if (alts.length) {
-    const altItems = alts.map((alt, ai) => {
-      const altDef = PLACE_TYPES.find(pt=>pt.id===alt.type);
+  if (pageAlts.length) {
+    const altItems = alts.map((alt) => {
+      const altDef  = PLACE_TYPES.find(pt=>pt.id===alt.type);
       const altIcon = altDef ? altDef.icon : '📍';
       const altStars = '★'.repeat(Math.min(alt.wait_score,10));
-      return `<div onclick="swapCandidate(${playerIdx},${globalPrePool.indexOf(alt)})"
+      // Stocker l'alt dans window pour accès inline
+      const altKey = `alt_${playerIdx}_${globalGeoFiltered.indexOf(alt)}`;
+      window[altKey] = alt;
+      return `<div onclick="swapCandidateFull(${playerIdx}, '${altKey}', '${stateKey}')"
         style="padding:6px 8px;border:1px solid #dde8e2;border-radius:3px;cursor:pointer;
-               margin-bottom:4px;transition:background .12s;"
+               margin-bottom:4px;background:#fff;transition:background .12s;"
         onmouseover="this.style.background='#e8f5ee'" onmouseout="this.style.background='#fff'">
         <div style="font-size:11px;font-weight:600;color:#1a2e24;">${altIcon} ${alt.name}</div>
         <div style="font-size:10px;color:#7a9e8a;margin-top:1px;">
@@ -733,39 +774,84 @@ function buildAlternativesPopup(playerIdx, currentCandidate, sectorCandidates, m
         </div>
       </div>`;
     }).join('');
+
     altsHtml = `
-      <div style="margin-top:8px;padding-top:6px;border-top:2px solid #dde8e2;">
-        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#7a9e8a;margin-bottom:5px;">Alternatives du secteur</div>
+      <div style="margin-top:8px;padding-top:6px;border-top:1.5px solid #dde8e2;">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#7a9e8a;margin-bottom:5px;">
+          Top ${totalAlts} alternative${totalAlts>1?'s':''} du secteur
+        </div>
         ${altItems}
       </div>`;
+  } else {
+    altsHtml = `<div style="margin-top:8px;font-size:10px;color:#aaa;font-style:italic;">
+      Aucune autre alternative dans ce secteur.</div>`;
   }
 
-  return `<div style="min-width:200px;font-family:'DM Sans',sans-serif;">
+  return `<div style="min-width:210px;max-height:420px;overflow-y:auto;font-family:'DM Sans',sans-serif;">
     <div style="font-weight:700;font-size:13px;color:#1a2e24;margin-bottom:3px;">
       <span style="display:inline-block;width:18px;height:18px;border-radius:3px;background:${color};
-            color:#fff;text-align:center;line-height:18px;font-size:10px;margin-right:4px;">${playerIdx+1}</span>${currentCandidate.name}
+            color:#fff;text-align:center;line-height:18px;font-size:10px;margin-right:4px;">${playerIdx+1}</span>
+      ${currentCandidate.name}
     </div>
     <div style="color:#7a9e8a;font-size:11px;">${icon} ${currentCandidate.type}</div>
     <div style="margin-top:5px;font-size:12px;">⏱ <b>${currentCandidate.walk_min.toFixed(1)} min</b> à pied</div>
     <div style="color:#1a6b3c;font-size:11px;margin-top:2px;">${stars} <b>${currentCandidate.wait_score}/10</b></div>
     ${bonusSection}
     ${altsHtml}
-    <div style="margin-top:6px;font-size:9px;color:#bbb;font-family:monospace;">${currentCandidate.lat.toFixed(5)}, ${currentCandidate.lon.toFixed(5)}</div>
+    <div style="margin-top:6px;font-size:9px;color:#bbb;font-family:monospace;">
+      ${currentCandidate.lat.toFixed(5)}, ${currentCandidate.lon.toFixed(5)}
+    </div>
   </div>`;
 }
 
+// changePage removed — no pagination, top 5 only
+
 // ═══════════════════════════════════════════════
-// SWAP CANDIDATE
+// SWAP CANDIDATE — infini, avec fetch OSRM si besoin
 // ═══════════════════════════════════════════════
-function swapCandidate(playerIdx, poolIdx) {
-  const newC = globalPrePool[poolIdx];
+async function swapCandidateFull(playerIdx, altKey, stateKey) {
+  const newC = window[altKey];
   if (!newC) return;
+
+  // Calculer walk_sec si pas encore fait via OSRM
+  if (!newC.walk_sec || newC.walk_sec === 9999) {
+    try {
+      const url = `https://router.project-osrm.org/route/v1/foot/${globalCenter.lon},${globalCenter.lat};${newC.lon},${newC.lat}?overview=false`;
+      const rd  = await (await fetch(url)).json();
+      if (rd.routes && rd.routes[0]) {
+        newC.walk_sec = rd.routes[0].duration;
+        newC.walk_min = newC.walk_sec / 60;
+      }
+    } catch(e) {}
+  }
+
   globalSelected[playerIdx] = newC;
-  map.closePopup();
-  // Redraw
-  drawnLayers.forEach(l=>map.removeLayer(l)); drawnLayers=[];
-  if(centerMarker){map.removeLayer(centerMarker);centerMarker=null;}
-  renderResults(globalSelected, globalCenter, globalN, globalT, globalT*60);
+  // Mettre à jour le popup state
+  if (window._popupState && window._popupState[stateKey]) {
+    window._popupState[stateKey].currentCandidate = newC;
+  }
+
+  // Mettre à jour le marker sans tout redessiner
+  const color = COLORS[playerIdx % COLORS.length];
+  const newPopup = buildAlternativesPopup(playerIdx, newC, null, null, color, 0);
+  if (globalMarkers[playerIdx]) {
+    globalMarkers[playerIdx].setLatLng([newC.lat, newC.lon]);
+    globalMarkers[playerIdx].setPopupContent(newPopup);
+    globalMarkers[playerIdx].openPopup();
+  }
+
+  // Mettre à jour la ligne
+  if (globalLines && globalLines[playerIdx]) {
+    globalLines[playerIdx].setLatLngs([[globalCenter.lat, globalCenter.lon],[newC.lat, newC.lon]]);
+  }
+
+  // Mettre à jour la liste
+  const nameEl = document.getElementById('result-name-'+playerIdx);
+  const metaEl = document.getElementById('result-meta-'+playerIdx);
+  const ptDef  = PLACE_TYPES.find(pt=>pt.id===newC.type);
+  const icon   = ptDef ? ptDef.icon : '📍';
+  if (nameEl) nameEl.textContent = newC.name;
+  if (metaEl) metaEl.innerHTML = `<span>${icon} ${newC.type}</span><span>⏱ ${newC.walk_min.toFixed(1)} min</span>`;
 }
 
 // ═══════════════════════════════════════════════
