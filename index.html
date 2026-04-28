@@ -508,10 +508,10 @@ function getValhallaCostingOptions() {
 // TYPES DE LIEUX
 // ═══════════════════════════════════════════════════════════
 const PLACE_TYPES = [
-  { id:"park",           label:"Parc",           icon:"🌳", score:10, group:"vert",
+  { id:"park",           label:"Parc",           icon:"🌳", score:9, group:"vert",
     query:(b)=>`node["leisure"="park"](${b});\n  way["leisure"="park"](${b});`,
     matchTags: t => t.leisure === 'park' },
-  { id:"garden",         label:"Jardin",          icon:"🌿", score:10, group:"vert",
+  { id:"garden",         label:"Jardin",          icon:"🌿", score:8, group:"vert",
     query:(b)=>`node["leisure"="garden"](${b});\n  way["leisure"="garden"](${b});`,
     matchTags: t => t.leisure === 'garden' },
   { id:"nature_reserve", label:"Réserve",         icon:"🦋", score:7, group:"vert",
