@@ -505,7 +505,19 @@ async function run() {
     }
     if(!selected.length) throw new Error('Aucun résultat. Essaie d\'autres types de lieux.');
 
-    renderResults(selected,center,N,T,T_sec);
+    // Store globals for swap/drag/export
+    globalSelected = selected;
+    globalPrePool  = prePool;
+    globalCenter   = center;
+    globalN        = N;
+    globalT        = T;
+
+    // Build sector->candidates map for alternatives
+    const sectorMap = Array.from({length:N}, (_,i) =>
+      prePool.filter(c => Math.floor(c.bearing/sectorSize)%N === i)
+    );
+
+    renderResults(selected, center, N, T, T_sec, sectorMap);
 
   } catch(e) { setStatus('Erreur : '+e.message,'error'); console.error(e); }
   document.getElementById('btnRun').disabled=false;
@@ -514,7 +526,7 @@ async function run() {
 // ═══════════════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════════════
-function renderResults(selected,center,N,T,T_sec){
+function renderResults(selected,center,N,T,T_sec,sectorMap){
   const wm=selected.map(p=>p.walk_min);
   const mean=wm.reduce((a,b)=>a+b,0)/wm.length;
   const std=Math.sqrt(wm.map(t=>(t-mean)**2).reduce((a,b)=>a+b,0)/wm.length);
@@ -528,7 +540,16 @@ function renderResults(selected,center,N,T,T_sec){
     <div class="stat-row"><span>Écart-type</span><b>${std.toFixed(2)} min</b></div>
     <div class="stat-row"><span>Min / Max</span><b>${Math.min(...wm).toFixed(1)} / ${Math.max(...wm).toFixed(1)} min</b></div>
     <div class="stat-row"><span>Distance min entre joueurs</span><b>${Math.round(Math.min(...dists))} m</b></div>
-    <div class="stat-row"><span>Distance max entre joueurs</span><b>${Math.round(Math.max(...dists))} m</b></div>`;
+    <div class="stat-row"><span>Distance max entre joueurs</span><b>${Math.round(Math.max(...dists))} m</b></div>
+    <div style="margin-top:10px;">
+      <button onclick="exportCSV()" style="width:100%;padding:8px;border:1px solid #1a6b3c;
+        background:#e8f5ee;color:#1a6b3c;font-family:'DM Sans',sans-serif;font-size:.78rem;
+        font-weight:600;cursor:pointer;border-radius:2px;letter-spacing:.04em;transition:all .15s;"
+        onmouseover="this.style.background='#1a6b3c';this.style.color='#fff';"
+        onmouseout="this.style.background='#e8f5ee';this.style.color='#1a6b3c';">
+        ↓ Exporter en CSV
+      </button>
+    </div>`;
 
   // Secteurs sur la carte
   const refR=T*80, sectorSize=360/N;
@@ -571,25 +592,79 @@ function renderResults(selected,center,N,T,T_sec){
       <div style="margin-top:6px;font-size:10px;color:#aaa;font-family:monospace;">${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div>
     </div>`;
 
-    // Marker
-    const marker=L.marker([p.lat,p.lon],{icon:L.divIcon({className:'',
-      html:`<div style="width:30px;height:30px;border-radius:5px;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;font-weight:700;font-size:13px;border:2px solid rgba(0,0,0,.12);box-shadow:0 2px 8px rgba(0,0,0,.2);">${i+1}</div>`,
-      iconSize:[30,30],iconAnchor:[15,15]})}).addTo(map).bindPopup(popup);
-    const line=L.polyline([[center.lat,center.lon],[p.lat,p.lon]],{color:'#1a6b3c',opacity:0.22,weight:1.5,dashArray:'5 7'}).addTo(map);
-    drawnLayers.push(marker,line);
+    // Sector candidates for alternatives
+    const playerBearing = p.bearing ?? bearing(center, p);
+    const playerSector  = sectorMap ? Math.floor(playerBearing/(360/N))%N : -1;
+    const sectorCands   = sectorMap ? (sectorMap[playerSector]||[]) : [];
+
+    // Build popup with alternatives
+    const popupContent = buildAlternativesPopup(i, p, sectorCands, null, color);
+
+    // Draggable marker
+    const marker = L.marker([p.lat, p.lon], {
+      draggable: true,
+      icon: L.divIcon({ className:'',
+        html:`<div style="width:30px;height:30px;border-radius:5px;background:${color};color:#fff;
+              display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;
+              font-weight:700;font-size:13px;border:2px solid rgba(0,0,0,.12);
+              box-shadow:0 2px 8px rgba(0,0,0,.2);cursor:grab;" title="Glisser pour déplacer">${i+1}</div>`,
+        iconSize:[30,30], iconAnchor:[15,15] })
+    }).addTo(map).bindPopup(popupContent, {maxWidth:260});
+
+    // Live line update while dragging
+    const lineCoords = [[center.lat,center.lon],[p.lat,p.lon]];
+    const line = L.polyline(lineCoords, {color:'#1a6b3c',opacity:0.22,weight:1.5,dashArray:'5 7'}).addTo(map);
+
+    marker.on('drag', e => {
+      const ll = e.target.getLatLng();
+      line.setLatLngs([[center.lat,center.lon],[ll.lat,ll.lng]]);
+    });
+
+    marker.on('dragend', async e => {
+      const ll = e.target.getLatLng();
+      // Reverse geocode
+      const newName = await reverseGeocode(ll.lat, ll.lng);
+      // Recalculate walk time via OSRM
+      let walkMin = p.walk_min;
+      try {
+        const url = `https://router.project-osrm.org/route/v1/foot/${center.lon},${center.lat};${ll.lng},${ll.lat}?overview=false`;
+        const rd  = await (await fetch(url)).json();
+        if (rd.routes && rd.routes[0]) walkMin = rd.routes[0].duration / 60;
+      } catch(err) {}
+      // Update candidate
+      globalSelected[i] = { ...globalSelected[i], lat:ll.lat, lon:ll.lng, name:newName,
+        walk_min:walkMin, walk_sec:walkMin*60, bonuses:[], wait_score:5, type:'custom', tags:{} };
+      // Update popup
+      const updatedPopup = buildAlternativesPopup(i, globalSelected[i], [], null, color);
+      marker.setPopupContent(updatedPopup);
+      marker.openPopup();
+      // Update list item
+      const nameEl = document.getElementById('result-name-'+i);
+      const metaEl = document.getElementById('result-meta-'+i);
+      if (nameEl) nameEl.textContent = newName;
+      if (metaEl) metaEl.innerHTML = `<span>📍 déplacé manuellement</span><span>⏱ ${walkMin.toFixed(1)} min</span>`;
+      line.setLatLngs([[center.lat,center.lon],[ll.lat,ll.lng]]);
+    });
+
+    drawnLayers.push(marker, line);
 
     // List item
-    const item=document.createElement('div');
-    item.className='result-item';
-    item.innerHTML=`
+    const item = document.createElement('div');
+    item.className = 'result-item';
+    item.innerHTML = `
       <div class="result-num" style="background:${color}">${i+1}</div>
       <div class="result-info">
-        <div class="result-name">${p.name}</div>
-        <div class="result-meta"><span>${icon} ${p.type}</span><span>⏱ ${p.walk_min.toFixed(1)} min</span></div>
+        <div class="result-name" id="result-name-${i}">${p.name}</div>
+        <div class="result-meta" id="result-meta-${i}">
+          <span>${icon} ${p.type}</span><span>⏱ ${p.walk_min.toFixed(1)} min</span>
+        </div>
         <div class="result-stars">${stars} ${p.wait_score}/10</div>
         ${p.bonuses.length?`<div class="result-bonus">${p.bonuses.join(' · ')}</div>`:''}
+        <div style="font-size:.62rem;color:#aaa;margin-top:3px;font-family:'DM Mono',monospace;">
+          ↔ glisser sur la carte pour déplacer
+        </div>
       </div>`;
-    item.onclick=()=>{map.setView([p.lat,p.lon],17);marker.openPopup();};
+    item.onclick = () => { map.setView([p.lat,p.lon],17); marker.openPopup(); };
     list.appendChild(item);
   });
 
@@ -598,6 +673,125 @@ function renderResults(selected,center,N,T,T_sec){
 }
 
 document.getElementById('address').addEventListener('keydown',e=>{if(e.key==='Enter')run();});
+
+// ═══════════════════════════════════════════════
+// GLOBAL STATE for alternatives + drag + export
+// ═══════════════════════════════════════════════
+let globalSelected = [];
+let globalPrePool  = [];
+let globalCenter   = null;
+let globalN        = 5;
+let globalT        = 10;
+
+// ═══════════════════════════════════════════════
+// REVERSE GEOCODE
+// ═══════════════════════════════════════════════
+async function reverseGeocode(lat, lon) {
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=18`,
+      { headers: {'Accept-Language':'fr'} });
+    const d = await r.json();
+    const t = d.address;
+    return t.amenity || t.leisure || t.shop || t.road || t.pedestrian || t.suburb || 'Position personnalisée';
+  } catch(e) { return 'Position personnalisée'; }
+}
+
+// ═══════════════════════════════════════════════
+// ALTERNATIVES POPUP
+// ═══════════════════════════════════════════════
+function buildAlternativesPopup(playerIdx, currentCandidate, sectorCandidates, marker, color) {
+  const alts = sectorCandidates
+    .filter(c => c !== currentCandidate && c.walk_sec < 9999)
+    .sort((a,b) => Math.abs(a.walk_sec - globalT*60) - Math.abs(b.walk_sec - globalT*60))
+    .slice(0, 4);
+
+  const ptDef = PLACE_TYPES.find(pt => pt.id === currentCandidate.type);
+  const icon  = ptDef ? ptDef.icon : '📍';
+  const stars = '★'.repeat(Math.min(currentCandidate.wait_score,10)) + '☆'.repeat(Math.max(0,10-currentCandidate.wait_score));
+
+  const bonusItems = currentCandidate.bonuses.map(b =>
+    `<div style="padding:3px 0;border-bottom:1px solid #eee;font-size:11px;">${b}</div>`).join('');
+  const bonusSection = currentCandidate.bonuses.length ? `
+    <div style="margin-top:7px;padding-top:5px;border-top:2px solid #1a6b3c;">
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#7a9e8a;margin-bottom:3px;">Points bonus</div>
+      ${bonusItems}
+    </div>` : '';
+
+  let altsHtml = '';
+  if (alts.length) {
+    const altItems = alts.map((alt, ai) => {
+      const altDef = PLACE_TYPES.find(pt=>pt.id===alt.type);
+      const altIcon = altDef ? altDef.icon : '📍';
+      const altStars = '★'.repeat(Math.min(alt.wait_score,10));
+      return `<div onclick="swapCandidate(${playerIdx},${globalPrePool.indexOf(alt)})"
+        style="padding:6px 8px;border:1px solid #dde8e2;border-radius:3px;cursor:pointer;
+               margin-bottom:4px;transition:background .12s;"
+        onmouseover="this.style.background='#e8f5ee'" onmouseout="this.style.background='#fff'">
+        <div style="font-size:11px;font-weight:600;color:#1a2e24;">${altIcon} ${alt.name}</div>
+        <div style="font-size:10px;color:#7a9e8a;margin-top:1px;">
+          ⏱ ${alt.walk_min.toFixed(1)} min · ${altStars} ${alt.wait_score}/10
+        </div>
+      </div>`;
+    }).join('');
+    altsHtml = `
+      <div style="margin-top:8px;padding-top:6px;border-top:2px solid #dde8e2;">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#7a9e8a;margin-bottom:5px;">Alternatives du secteur</div>
+        ${altItems}
+      </div>`;
+  }
+
+  return `<div style="min-width:200px;font-family:'DM Sans',sans-serif;">
+    <div style="font-weight:700;font-size:13px;color:#1a2e24;margin-bottom:3px;">
+      <span style="display:inline-block;width:18px;height:18px;border-radius:3px;background:${color};
+            color:#fff;text-align:center;line-height:18px;font-size:10px;margin-right:4px;">${playerIdx+1}</span>${currentCandidate.name}
+    </div>
+    <div style="color:#7a9e8a;font-size:11px;">${icon} ${currentCandidate.type}</div>
+    <div style="margin-top:5px;font-size:12px;">⏱ <b>${currentCandidate.walk_min.toFixed(1)} min</b> à pied</div>
+    <div style="color:#1a6b3c;font-size:11px;margin-top:2px;">${stars} <b>${currentCandidate.wait_score}/10</b></div>
+    ${bonusSection}
+    ${altsHtml}
+    <div style="margin-top:6px;font-size:9px;color:#bbb;font-family:monospace;">${currentCandidate.lat.toFixed(5)}, ${currentCandidate.lon.toFixed(5)}</div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════
+// SWAP CANDIDATE
+// ═══════════════════════════════════════════════
+function swapCandidate(playerIdx, poolIdx) {
+  const newC = globalPrePool[poolIdx];
+  if (!newC) return;
+  globalSelected[playerIdx] = newC;
+  map.closePopup();
+  // Redraw
+  drawnLayers.forEach(l=>map.removeLayer(l)); drawnLayers=[];
+  if(centerMarker){map.removeLayer(centerMarker);centerMarker=null;}
+  renderResults(globalSelected, globalCenter, globalN, globalT, globalT*60);
+}
+
+// ═══════════════════════════════════════════════
+// EXPORT CSV
+// ═══════════════════════════════════════════════
+function exportCSV() {
+  if (!globalSelected.length) return;
+  const header = ['Joueur','Nom','Type','Latitude','Longitude','Temps_marche_min','Score_qualite','Bonus'];
+  const rows = globalSelected.map((p,i) => [
+    i+1,
+    `"${p.name.replace(/"/g,'""')}"`,
+    p.type,
+    p.lat.toFixed(6),
+    p.lon.toFixed(6),
+    p.walk_min.toFixed(1),
+    p.wait_score,
+    `"${(p.bonuses||[]).join(' | ')}"`
+  ]);
+  const csv = [header, ...rows].map(r=>r.join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'deploiement.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
 </script>
 </body>
 </html>
