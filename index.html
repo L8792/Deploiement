@@ -5,266 +5,739 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Déploiement+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
 <style>
 :root {
-  --green:       #1a6b3c;
-  --green-mid:   #2d9e5f;
-  --green-light: #e8f5ee;
-  --border:      #dde8e2;
-  --text:        #1a2e24;
-  --muted:       #7a9e8a;
-  --bg:          #f4f7f5;
-  --white:       #ffffff;
-  --red:         #c0392b;
-  --orange:      #e07b2a;
-  --yellow:      #c8970a;
+  /* Cartographic palette — paper, ink, forest, ochre */
+  --paper:        #f5f1e8;
+  --paper-2:      #ede8d9;
+  --paper-line:   #d9d2bd;
+  --ink:          #1a1d1a;
+  --ink-2:        #3a3f3a;
+  --ink-3:        #6b6f68;
+  --ink-4:        #9a9d96;
+
+  --forest:       #0d3d24;
+  --forest-2:     #1a6b3c;
+  --forest-3:     #2d9e5f;
+  --forest-soft:  #e3ecde;
+
+  --ochre:        #b8862a;
+  --ochre-soft:   #f0e4c5;
+  --rust:         #a8442a;
+  --rust-soft:    #f0d9cc;
+
+  --white:        #fdfbf5;
+  --shadow:       0 1px 0 rgba(26,29,26,.04), 0 2px 8px rgba(26,29,26,.06);
+  --shadow-lg:    0 8px 32px rgba(13,61,36,.12);
+
+  /* Legacy aliases for JS-injected styles */
+  --green:       var(--forest);
+  --green-mid:   var(--forest-2);
+  --green-light: var(--forest-soft);
+  --border:      var(--paper-line);
+  --text:        var(--ink);
+  --muted:       var(--ink-3);
+  --bg:          var(--paper);
+  --red:         var(--rust);
+  --orange:      var(--ochre);
+  --yellow:      var(--ochre);
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text);
-       display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+html, body { height:100%; }
+body {
+  font-family:'Inter Tight', system-ui, sans-serif;
+  background:var(--paper); color:var(--ink);
+  display:flex; flex-direction:column; height:100vh; overflow:hidden;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing:antialiased;
+}
 
-/* HEADER */
-header { display:flex; align-items:center; gap:14px; padding:0 20px; height:50px;
-         background:var(--white); border-bottom:1px solid var(--border);
-         box-shadow:0 1px 4px rgba(26,107,60,.06); flex-shrink:0; z-index:1000; }
-.logo { background:var(--green); color:#fff; font-family:'DM Mono',monospace;
-        font-size:.75rem; font-weight:500; padding:4px 9px; letter-spacing:.06em; }
-header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:-.02em; flex:1; }
+/* Subtle paper grain */
+body::before {
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(184,134,42,.018) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(13,61,36,.015) 0%, transparent 50%);
+}
 
-/* LAYOUT */
-.layout { display:grid; grid-template-columns:340px 1fr; flex:1; min-height:0; }
+/* ════════ HEADER ════════ */
+header {
+  display:flex; align-items:center; gap:16px; padding:0 22px; height:56px;
+  background:var(--white);
+  border-bottom:1px solid var(--paper-line);
+  flex-shrink:0; z-index:1000; position:relative;
+}
+header::after {
+  content:""; position:absolute; left:0; right:0; bottom:-1px; height:1px;
+  background:linear-gradient(90deg, transparent, var(--forest) 20%, var(--forest) 80%, transparent);
+  opacity:0.15;
+}
+.logo {
+  display:flex; align-items:center; justify-content:center;
+  width:32px; height:32px; border-radius:6px;
+  background:var(--forest); color:var(--paper);
+  font-family:'JetBrains Mono', monospace; font-size:.78rem; font-weight:600;
+  letter-spacing:-.02em;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08), 0 1px 2px rgba(13,61,36,.3);
+}
+header h1 {
+  font-family:'Fraunces', serif;
+  font-size:1.15rem; font-weight:600; color:var(--ink);
+  letter-spacing:-.02em; flex:1;
+}
+header h1 em {
+  font-style:italic; color:var(--forest-2); font-weight:500;
+}
+.header-meta {
+  font-family:'JetBrains Mono', monospace;
+  font-size:.65rem; color:var(--ink-4);
+  letter-spacing:.08em; text-transform:uppercase;
+  display:flex; gap:14px; align-items:center;
+}
+.header-meta .dot {
+  width:6px; height:6px; border-radius:50%; background:var(--forest-3);
+  box-shadow:0 0 0 3px rgba(45,158,95,.18);
+  animation:breathe 2.4s ease-in-out infinite;
+}
+@keyframes breathe { 50% { opacity:.45; } }
 
-/* PANEL */
-.panel { background:var(--white); border-right:1px solid var(--border);
-         display:flex; flex-direction:column; overflow:hidden; position:relative; }
-.panel-scroll { flex:1; overflow-y:auto; padding-bottom:140px; }
+/* ════════ LAYOUT ════════ */
+.layout {
+  display:grid;
+  grid-template-columns:380px 1fr;
+  flex:1; min-height:0;
+  position:relative; z-index:1;
+}
 
-.section { padding:14px 16px; border-bottom:1px solid var(--border); }
-.section-title { font-size:.6rem; font-weight:700; letter-spacing:.12em;
-                 text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+/* ════════ PANEL ════════ */
+.panel {
+  background:var(--white);
+  border-right:1px solid var(--paper-line);
+  display:flex; flex-direction:column; overflow:hidden; position:relative;
+}
+.panel-scroll {
+  flex:1; overflow-y:auto; padding-bottom:120px;
+  scrollbar-width:thin; scrollbar-color:var(--paper-line) transparent;
+}
+.panel-scroll::-webkit-scrollbar { width:8px; }
+.panel-scroll::-webkit-scrollbar-thumb { background:var(--paper-line); border-radius:4px; }
 
-/* INPUTS */
-.field { margin-bottom:10px; }
+.section {
+  padding:18px 22px;
+  border-bottom:1px solid var(--paper-line);
+  position:relative;
+}
+.section-title {
+  font-family:'JetBrains Mono', monospace;
+  font-size:.62rem; font-weight:500; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-3);
+  margin-bottom:14px;
+  display:flex; align-items:center; gap:8px;
+}
+.section-title::before {
+  content:""; width:14px; height:1px; background:var(--ink-4);
+}
+
+/* ════════ FIELDS ════════ */
+.field { margin-bottom:14px; }
 .field:last-child { margin-bottom:0; }
-.field label { display:block; font-size:.68rem; font-weight:500; color:var(--muted);
-               letter-spacing:.05em; text-transform:uppercase; margin-bottom:4px; }
-.field input[type="text"] { width:100%; border:1px solid var(--border); background:var(--bg);
-  color:var(--text); font-family:'DM Sans',sans-serif; font-size:.85rem;
-  padding:8px 10px; outline:none; transition:border-color .15s; border-radius:2px; }
-.field input[type="text"]:focus { border-color:var(--green); }
-.field input[type="text"]::placeholder { color:var(--muted); }
-.range-row { display:flex; gap:10px; }
-.range-row .field { flex:1; }
-.field input[type="range"] { width:100%; accent-color:var(--green); cursor:pointer; margin-top:2px; }
-.range-val { display:flex; justify-content:space-between; align-items:baseline; margin-top:2px; }
-.range-val strong { font-family:'DM Mono',monospace; font-size:1.1rem; color:var(--green); font-weight:500; }
-.range-val small { font-size:.66rem; color:var(--muted); }
+.field label {
+  display:flex; align-items:center; gap:4px;
+  font-size:.7rem; font-weight:500; color:var(--ink-2);
+  letter-spacing:.01em; margin-bottom:6px;
+}
 
-/* ADDRESS ROW */
-.address-row { display:flex; gap:6px; align-items:flex-end; }
+.field input[type="text"] {
+  width:100%; border:1px solid var(--paper-line);
+  background:var(--paper); color:var(--ink);
+  font-family:'Inter Tight', sans-serif; font-size:.88rem;
+  padding:9px 12px; outline:none;
+  transition:all .15s ease;
+  border-radius:5px;
+}
+.field input[type="text"]:focus {
+  border-color:var(--forest); background:var(--white);
+  box-shadow:0 0 0 3px rgba(13,61,36,.08);
+}
+.field input[type="text"]::placeholder { color:var(--ink-4); }
+
+/* ════════ RANGE SLIDERS — refined ════════ */
+.field input[type="range"] {
+  -webkit-appearance:none; appearance:none;
+  width:100%; height:18px; background:transparent; cursor:pointer;
+  margin-top:6px;
+}
+.field input[type="range"]::-webkit-slider-runnable-track {
+  height:4px; background:var(--paper-line); border-radius:2px;
+}
+.field input[type="range"]::-moz-range-track {
+  height:4px; background:var(--paper-line); border-radius:2px;
+}
+.field input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none;
+  width:16px; height:16px; border-radius:50%;
+  background:var(--white); border:2px solid var(--forest);
+  margin-top:-6px; cursor:grab;
+  box-shadow:0 1px 3px rgba(13,61,36,.25);
+  transition:transform .12s;
+}
+.field input[type="range"]::-webkit-slider-thumb:hover { transform:scale(1.15); }
+.field input[type="range"]::-webkit-slider-thumb:active { cursor:grabbing; transform:scale(1.05); }
+.field input[type="range"]::-moz-range-thumb {
+  width:16px; height:16px; border-radius:50%;
+  background:var(--white); border:2px solid var(--forest);
+  cursor:grab; box-shadow:0 1px 3px rgba(13,61,36,.25);
+}
+
+.range-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.range-val {
+  display:flex; justify-content:space-between; align-items:baseline;
+  margin-top:4px;
+}
+.range-val strong {
+  font-family:'JetBrains Mono', monospace;
+  font-size:1.3rem; color:var(--forest); font-weight:500;
+  font-feature-settings:"tnum";
+  letter-spacing:-.02em;
+}
+.range-val small {
+  font-size:.65rem; color:var(--ink-4);
+  font-family:'JetBrains Mono', monospace;
+  letter-spacing:.04em; text-transform:lowercase;
+}
+
+/* ════════ ADDRESS ════════ */
+.address-row {
+  display:flex; gap:8px; align-items:flex-end;
+}
 .address-row .field { flex:1; margin-bottom:0; }
-.btn-geolocate { flex-shrink:0; height:34px; width:34px; border:1px solid var(--border);
-  background:var(--bg); color:var(--muted); cursor:pointer; border-radius:2px;
-  font-size:.9rem; transition:all .15s; display:flex; align-items:center; justify-content:center; }
-.btn-geolocate:hover { border-color:var(--green); color:var(--green); background:var(--green-light); }
+.btn-geolocate {
+  flex-shrink:0; height:38px; width:38px;
+  border:1px solid var(--paper-line);
+  background:var(--paper); color:var(--ink-3);
+  cursor:pointer; border-radius:5px;
+  font-size:1rem; transition:all .15s;
+  display:flex; align-items:center; justify-content:center;
+}
+.btn-geolocate:hover {
+  border-color:var(--forest); color:var(--forest);
+  background:var(--forest-soft);
+}
 
-/* SCORING WEIGHTS */
-.weights-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:6px; }
-.weight-field { text-align:center; }
-.weight-field label { display:block; font-size:.6rem; font-weight:600; color:var(--muted);
-  letter-spacing:.05em; text-transform:uppercase; margin-bottom:4px; }
-.weight-field input[type="range"] { width:100%; accent-color:var(--green); }
-.weight-field .wval { font-family:'DM Mono',monospace; font-size:.8rem; color:var(--green);
-  font-weight:500; margin-top:2px; }
+/* ════════ BUTTONS ════════ */
+.btn-small {
+  font-family:'Inter Tight', sans-serif;
+  font-size:.7rem; font-weight:500;
+  padding:6px 10px;
+  border:1px solid var(--paper-line);
+  background:var(--white); color:var(--ink-2);
+  cursor:pointer; transition:all .12s;
+  border-radius:4px;
+  letter-spacing:.01em;
+}
+.btn-small:hover {
+  border-color:var(--forest); color:var(--forest);
+  background:var(--forest-soft);
+}
+.btn-small.active {
+  border-color:var(--forest); background:var(--forest);
+  color:var(--paper);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.1);
+}
 
-/* PLACE TYPES */
-.select-all-row { display:flex; gap:6px; margin-bottom:8px; }
-.btn-small { font-size:.67rem; font-family:'DM Sans',sans-serif; padding:3px 8px;
-             border:1px solid var(--border); background:var(--white); color:var(--muted);
-             cursor:pointer; transition:all .15s; border-radius:2px; }
-.btn-small:hover { border-color:var(--green); color:var(--green); }
-.btn-small.active { border-color:var(--green); background:var(--green-light); color:var(--green); }
+/* Segmented control style for presets */
+.seg-control {
+  display:grid; grid-auto-flow:column; grid-auto-columns:1fr;
+  background:var(--paper); padding:3px;
+  border-radius:6px; border:1px solid var(--paper-line);
+  gap:2px;
+}
+.seg-control .btn-small {
+  border:none; background:transparent; padding:6px 4px;
+  font-size:.68rem; border-radius:4px;
+  text-align:center;
+}
+.seg-control .btn-small.active {
+  background:var(--white); color:var(--forest);
+  box-shadow:0 1px 2px rgba(0,0,0,.06), 0 0 0 1px var(--paper-line);
+}
 
-.place-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
-.place-toggle { display:flex; align-items:center; gap:7px; padding:6px 8px;
-                border:1px solid var(--border); background:var(--bg); cursor:pointer;
-                transition:all .15s; user-select:none; border-radius:2px; }
-.place-toggle:hover { border-color:var(--green-mid); background:var(--green-light); }
-.place-toggle.active { border-color:var(--green); background:var(--green-light); }
-.pt-icon { font-size:.95rem; flex-shrink:0; }
+/* Speed presets */
+.speed-presets {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:4px;
+  margin-bottom:8px;
+}
+.speed-presets .btn-small { text-align:center; padding:7px 4px; font-size:.68rem; }
+
+/* ════════ PLACE GRID ════════ */
+.select-all-row { display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+
+.place-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:6px;
+}
+.place-toggle {
+  display:flex; align-items:center; gap:8px;
+  padding:8px 10px;
+  border:1px solid var(--paper-line);
+  background:var(--paper);
+  cursor:pointer; transition:all .12s;
+  user-select:none; border-radius:5px;
+  position:relative;
+}
+.place-toggle:hover {
+  border-color:var(--forest-2); background:var(--forest-soft);
+}
+.place-toggle.active {
+  border-color:var(--forest); background:var(--forest-soft);
+}
+.place-toggle.active::before {
+  content:""; position:absolute; left:0; top:6px; bottom:6px; width:2px;
+  background:var(--forest); border-radius:0 1px 1px 0;
+}
+.pt-icon {
+  flex-shrink:0;
+  width:22px; height:22px;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:5px;
+  background:var(--paper);
+  font-size:1rem; line-height:1;
+  transition:all .12s;
+}
+.place-toggle.active .pt-icon {
+  background:var(--white);
+  box-shadow:inset 0 0 0 1px var(--paper-line);
+}
 .pt-info { flex:1; min-width:0; }
-.pt-name { font-size:.73rem; font-weight:600; color:var(--text); line-height:1.2; }
-.pt-score { font-size:.6rem; color:var(--muted); font-family:'DM Mono',monospace; }
-.pt-check { width:13px; height:13px; border:1.5px solid var(--border); border-radius:2px;
-            background:var(--white); flex-shrink:0; display:flex; align-items:center;
-            justify-content:center; font-size:.55rem; transition:all .15s; }
-.place-toggle.active .pt-check { background:var(--green); border-color:var(--green); color:#fff; }
+.pt-name {
+  font-size:.74rem; font-weight:500; color:var(--ink);
+  line-height:1.2;
+}
+.pt-check {
+  width:14px; height:14px; border:1.5px solid var(--paper-line); border-radius:3px;
+  background:var(--white); flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:.6rem; transition:all .12s;
+}
+.place-toggle.active .pt-check {
+  background:var(--forest); border-color:var(--forest); color:var(--paper);
+}
 
-/* PROGRESS STEPPER */
-.progress-stepper { padding:12px 16px; border-bottom:1px solid var(--border); display:none; }
+/* Score stepper */
+.score-stepper {
+  display:flex; align-items:center; gap:3px; margin-top:5px;
+}
+.score-btn {
+  width:18px; height:18px; border-radius:3px;
+  border:1px solid var(--paper-line); background:var(--white);
+  color:var(--ink-3); font-size:.7rem; line-height:1;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  padding:0; transition:all .12s; flex-shrink:0;
+  font-family:'JetBrains Mono', monospace;
+}
+.score-btn:hover { border-color:var(--forest); color:var(--forest); background:var(--forest-soft); }
+.score-val {
+  font-family:'JetBrains Mono', monospace; font-size:.68rem;
+  color:var(--forest); font-weight:600;
+  min-width:14px; text-align:center;
+  font-feature-settings:"tnum";
+}
+
+/* ════════ WEIGHTS ════════ */
+.weights-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:10px; }
+.weight-field { text-align:left; }
+.weight-field label {
+  font-size:.68rem; font-weight:500; color:var(--ink-2);
+  letter-spacing:.01em; margin-bottom:4px;
+  display:flex; align-items:center; gap:4px;
+}
+.weight-field .wval {
+  font-family:'JetBrains Mono', monospace; font-size:.85rem;
+  color:var(--forest); font-weight:600; margin-top:4px;
+  font-feature-settings:"tnum";
+}
+
+/* ════════ TOGGLE ════════ */
+.toggle-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 12px;
+  background:var(--paper); border-radius:5px;
+  border:1px solid var(--paper-line);
+  margin-top:8px;
+}
+.toggle-row > label:first-child {
+  font-size:.72rem; font-weight:500; color:var(--ink-2);
+  letter-spacing:.01em;
+  display:flex; align-items:center; gap:6px;
+}
+.toggle-switch {
+  position:relative; display:inline-block; width:34px; height:20px;
+}
+.toggle-switch input { opacity:0; width:0; height:0; }
+.toggle-slider {
+  position:absolute; cursor:pointer; inset:0;
+  background:var(--paper-line); border-radius:20px;
+  transition:.2s;
+}
+.toggle-slider:before {
+  position:absolute; content:""; height:14px; width:14px;
+  left:3px; bottom:3px; background:var(--white);
+  border-radius:50%; transition:.2s;
+  box-shadow:0 1px 2px rgba(0,0,0,.15);
+}
+.toggle-switch input:checked + .toggle-slider { background:var(--forest); }
+.toggle-switch input:checked + .toggle-slider:before { transform:translateX(14px); }
+
+.iso-badge {
+  display:inline-block; font-size:.6rem;
+  font-family:'JetBrains Mono', monospace;
+  padding:3px 7px; border-radius:3px;
+  letter-spacing:.04em; font-weight:500;
+}
+.iso-badge.active {
+  background:var(--forest-soft); color:var(--forest);
+  border:1px solid var(--forest-2);
+}
+.iso-badge.fallback {
+  background:var(--ochre-soft); color:var(--ochre);
+  border:1px solid var(--ochre);
+}
+
+/* ════════ STEPPER ════════ */
+.progress-stepper {
+  padding:16px 22px; border-bottom:1px solid var(--paper-line); display:none;
+  background:var(--paper);
+}
 .progress-stepper.visible { display:block; }
-.stepper-title { font-size:.6rem; font-weight:700; letter-spacing:.12em;
-  text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
-.step-item { display:flex; align-items:center; gap:8px; padding:4px 0;
-  font-size:.72rem; color:var(--muted); transition:color .2s; }
-.step-item.running { color:var(--green); }
-.step-item.done { color:var(--green-mid); }
-.step-item.error { color:var(--red); }
-.step-dot { width:16px; height:16px; border-radius:50%; border:1.5px solid var(--border);
-  flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:.55rem;
-  transition:all .2s; background:var(--white); }
-.step-item.running .step-dot { border-color:var(--green); background:var(--green-light);
-  animation:pulse-dot .8s ease-in-out infinite alternate; }
-.step-item.done .step-dot { border-color:var(--green-mid); background:var(--green-mid); color:#fff; }
-.step-item.error .step-dot { border-color:var(--red); background:var(--red); color:#fff; }
-@keyframes pulse-dot { from { box-shadow:0 0 0 0 rgba(26,107,60,.3); }
-                        to   { box-shadow:0 0 0 4px rgba(26,107,60,0); } }
-.step-detail { font-family:'DM Mono',monospace; font-size:.62rem; color:var(--muted);
-  margin-top:2px; padding-left:24px; }
+.stepper-title {
+  font-family:'JetBrains Mono', monospace;
+  font-size:.62rem; font-weight:500; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-3); margin-bottom:10px;
+}
+.step-item {
+  display:flex; align-items:center; gap:10px; padding:5px 0;
+  font-size:.74rem; color:var(--ink-3); transition:color .2s;
+}
+.step-item.running { color:var(--forest); font-weight:500; }
+.step-item.done { color:var(--ink-2); }
+.step-item.error { color:var(--rust); }
+.step-dot {
+  width:18px; height:18px; border-radius:50%;
+  border:1.5px solid var(--paper-line);
+  flex-shrink:0; display:flex; align-items:center; justify-content:center;
+  font-size:.6rem; transition:all .2s;
+  background:var(--white);
+  font-family:'JetBrains Mono', monospace;
+}
+.step-item.running .step-dot {
+  border-color:var(--forest); background:var(--forest-soft);
+  animation:pulse-dot .8s ease-in-out infinite alternate;
+}
+.step-item.done .step-dot {
+  border-color:var(--forest-2); background:var(--forest-2); color:var(--paper);
+}
+.step-item.error .step-dot {
+  border-color:var(--rust); background:var(--rust); color:var(--paper);
+}
+@keyframes pulse-dot {
+  from { box-shadow:0 0 0 0 rgba(13,61,36,.3); }
+  to   { box-shadow:0 0 0 5px rgba(13,61,36,0); }
+}
+.step-detail {
+  font-family:'JetBrains Mono', monospace; font-size:.62rem;
+  color:var(--ink-4); margin-top:1px; padding-left:28px;
+}
 
-/* FOOTER */
-.panel-footer { position:absolute; bottom:0; left:0; width:100%;
-                background:var(--white); border-top:1px solid var(--border); padding:12px 16px; }
-.btn-run { width:100%; background:var(--green); color:#fff; border:none;
-           font-family:'DM Sans',sans-serif; font-weight:700; font-size:.88rem;
-           letter-spacing:.04em; padding:10px; cursor:pointer; transition:all .15s;
-           text-transform:uppercase; border-radius:2px; }
-.btn-run:hover:not(:disabled) { background:var(--green-mid); }
-.btn-run:disabled { background:var(--border); color:var(--muted); cursor:not-allowed; }
+/* ════════ FOOTER ════════ */
+.panel-footer {
+  position:absolute; bottom:0; left:0; width:100%;
+  background:var(--white);
+  border-top:1px solid var(--paper-line);
+  padding:14px 22px;
+  box-shadow:0 -4px 12px rgba(13,61,36,.04);
+}
+.btn-run {
+  width:100%; background:var(--forest); color:var(--paper);
+  border:none; font-family:'Inter Tight', sans-serif;
+  font-weight:600; font-size:.85rem;
+  letter-spacing:.04em; padding:12px 14px;
+  cursor:pointer; transition:all .15s;
+  border-radius:6px;
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 1px 2px rgba(13,61,36,.3);
+  position:relative; overflow:hidden;
+}
+.btn-run:hover:not(:disabled) {
+  background:var(--forest-2);
+  transform:translateY(-1px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.1), 0 4px 12px rgba(13,61,36,.25);
+}
+.btn-run:active:not(:disabled) { transform:translateY(0); }
+.btn-run:disabled {
+  background:var(--paper-line); color:var(--ink-4); cursor:not-allowed;
+  box-shadow:none;
+}
+.btn-run .arrow {
+  font-family:'JetBrains Mono', monospace;
+  font-size:.95rem;
+}
 
-/* STATUS */
-.status { font-size:.7rem; color:var(--muted); margin-top:7px; min-height:16px;
-          display:flex; align-items:center; gap:6px; font-family:'DM Mono',monospace; }
-.status.running { color:var(--green); }
-.status.error   { color:var(--red); }
-.status.ok      { color:var(--green-mid); }
-.spinner { width:10px; height:10px; border:2px solid var(--green-light);
-           border-top-color:var(--green); border-radius:50%; animation:spin .7s linear infinite;
-           display:none; flex-shrink:0; }
+.status {
+  font-family:'JetBrains Mono', monospace;
+  font-size:.68rem; color:var(--ink-3);
+  margin-top:8px; min-height:16px;
+  display:flex; align-items:center; gap:7px;
+  letter-spacing:.02em;
+}
+.status.running { color:var(--forest); }
+.status.error   { color:var(--rust); }
+.status.ok      { color:var(--forest-2); }
+.spinner {
+  width:10px; height:10px;
+  border:1.5px solid var(--paper-line);
+  border-top-color:var(--forest); border-radius:50%;
+  animation:spin .7s linear infinite;
+  display:none; flex-shrink:0;
+}
 .status.running .spinner { display:block; }
 @keyframes spin { to { transform:rotate(360deg); } }
 
-/* RESULTS */
-.result-item { padding:11px 16px; border-bottom:1px solid var(--border); cursor:pointer;
-               transition:background .12s; display:flex; align-items:flex-start; gap:10px; }
-.result-item:hover { background:var(--green-light); }
-.result-num { width:26px; height:26px; border-radius:4px; display:flex; align-items:center;
-              justify-content:center; font-weight:700; font-size:.8rem; color:#fff;
-              flex-shrink:0; margin-top:1px; }
+/* ════════ RESULTS ════════ */
+.result-item {
+  padding:13px 22px; border-bottom:1px solid var(--paper-line);
+  cursor:pointer; transition:background .12s;
+  display:flex; align-items:flex-start; gap:12px;
+  position:relative;
+}
+.result-item:hover { background:var(--forest-soft); }
+.result-item:hover::before {
+  content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:var(--forest);
+}
+.result-num {
+  width:30px; height:30px; border-radius:6px;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono', monospace;
+  font-weight:600; font-size:.82rem; color:var(--paper);
+  flex-shrink:0; margin-top:1px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.12), 0 1px 2px rgba(0,0,0,.15);
+}
 .result-info { flex:1; min-width:0; }
-.result-name { font-size:.82rem; font-weight:600; color:var(--text); }
-.result-meta { font-size:.68rem; color:var(--muted); margin-top:2px; display:flex; gap:8px; flex-wrap:wrap; }
-.result-stars { font-size:.68rem; color:var(--green); margin-top:2px; }
-.result-bonus { font-size:.63rem; color:var(--green-mid); margin-top:3px; line-height:1.5; }
-.result-discretion { font-size:.62rem; margin-top:2px; }
+.result-name {
+  font-size:.86rem; font-weight:600; color:var(--ink);
+  letter-spacing:-.01em;
+}
+.result-meta {
+  font-family:'JetBrains Mono', monospace;
+  font-size:.66rem; color:var(--ink-3);
+  margin-top:3px; display:flex; gap:10px; flex-wrap:wrap;
+  letter-spacing:.02em;
+}
+.result-stars {
+  font-size:.68rem; color:var(--forest); margin-top:3px;
+  letter-spacing:.05em;
+}
+.result-bonus {
+  font-size:.66rem; color:var(--forest-2);
+  margin-top:4px; line-height:1.5;
+}
+.result-discretion { font-size:.65rem; margin-top:3px; }
 
-.stat-row { display:flex; justify-content:space-between; padding:6px 0;
-            border-bottom:1px solid var(--border); font-size:.75rem; }
-.stat-row span { color:var(--muted); }
-.stat-row b { color:var(--green); font-family:'DM Mono',monospace; font-weight:500; }
+/* ════════ STATS ════════ */
+.stat-row {
+  display:flex; justify-content:space-between;
+  padding:7px 0; border-bottom:1px solid var(--paper-line);
+  font-size:.76rem;
+}
+.stat-row:last-child { border-bottom:none; }
+.stat-row span { color:var(--ink-3); }
+.stat-row b {
+  color:var(--ink); font-family:'JetBrains Mono', monospace;
+  font-weight:500; font-feature-settings:"tnum";
+}
 
-.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center;
-               padding:40px 20px; color:var(--muted); text-align:center; gap:10px; }
-.empty-state .big { font-size:2.2rem; }
-.empty-state p { font-size:.76rem; line-height:1.6; max-width:220px; }
+/* ════════ EMPTY STATE ════════ */
+.empty-state {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:48px 24px; color:var(--ink-3); text-align:center; gap:14px;
+}
+.empty-state .compass {
+  width:56px; height:56px; border-radius:50%;
+  border:1.5px solid var(--paper-line);
+  display:flex; align-items:center; justify-content:center;
+  position:relative; background:var(--paper);
+}
+.empty-state .compass::before {
+  content:""; position:absolute; inset:8px; border-radius:50%;
+  border:1px dashed var(--paper-line);
+}
+.empty-state .compass::after {
+  content:"N"; font-family:'JetBrains Mono', monospace;
+  font-size:.55rem; color:var(--ink-3);
+  position:absolute; top:5px;
+}
+.empty-state .compass-needle {
+  width:2px; height:24px;
+  background:linear-gradient(to bottom, var(--rust) 0%, var(--rust) 50%, var(--ink) 50%, var(--ink) 100%);
+  border-radius:1px;
+}
+.empty-state h3 {
+  font-family:'Fraunces', serif; font-size:1.05rem; font-weight:500;
+  color:var(--ink); letter-spacing:-.01em;
+}
+.empty-state p {
+  font-size:.78rem; line-height:1.55; max-width:240px; color:var(--ink-3);
+}
+.empty-state .keys {
+  display:flex; gap:6px; margin-top:6px;
+  font-family:'JetBrains Mono', monospace; font-size:.6rem;
+  color:var(--ink-4); letter-spacing:.05em;
+}
+.empty-state .keys kbd {
+  background:var(--paper); padding:2px 6px; border-radius:3px;
+  border:1px solid var(--paper-line);
+}
 
-/* ISOCHRONE STATUS */
-.iso-badge { display:inline-block; font-size:.6rem; font-family:'DM Mono',monospace;
-  padding:2px 6px; border-radius:2px; margin-left:6px; }
-.iso-badge.active { background:var(--green-light); color:var(--green); border:1px solid var(--green); }
-.iso-badge.fallback { background:#fff8e1; color:#c8970a; border:1px solid #c8970a; }
+/* ════════ MAP ════════ */
+#map {
+  width:100%; height:100%;
+  background:var(--paper-2);
+}
+.leaflet-popup-content-wrapper {
+  border-radius:8px !important;
+  box-shadow:0 4px 20px rgba(13,61,36,.18) !important;
+  border:1px solid var(--paper-line);
+  font-family:'Inter Tight', sans-serif;
+  background:var(--white) !important;
+}
+.leaflet-popup-content { margin:14px 16px; }
+.leaflet-popup-tip { background:var(--white) !important; }
 
-/* MAP */
-#map { width:100%; height:100%; }
-.leaflet-popup-content-wrapper { border-radius:6px; box-shadow:0 2px 16px rgba(0,0,0,.12);
-  border:1px solid var(--border); font-family:'DM Sans',sans-serif; }
-.leaflet-popup-content { margin:12px 14px; }
-.leaflet-control-layers { border:1px solid var(--border) !important; border-radius:6px !important;
-  box-shadow:0 2px 8px rgba(0,0,0,.08) !important; font-family:'DM Sans',sans-serif; font-size:.8rem; }
+.leaflet-control-layers {
+  border:1px solid var(--paper-line) !important;
+  border-radius:6px !important;
+  box-shadow:var(--shadow) !important;
+  font-family:'Inter Tight', sans-serif !important;
+  font-size:.78rem !important;
+  background:var(--white) !important;
+  padding:4px !important;
+}
+.leaflet-control-zoom a {
+  background:var(--white) !important;
+  border:1px solid var(--paper-line) !important;
+  color:var(--ink) !important;
+  font-weight:400 !important;
+}
+.leaflet-control-attribution {
+  font-family:'JetBrains Mono', monospace !important;
+  font-size:.6rem !important;
+  background:rgba(253,251,245,.85) !important;
+  letter-spacing:.02em;
+}
 
-/* MARKER HIGHLIGHT */
+/* Marker highlight */
 .marker-highlight > div {
   transform: scale(1.4) !important;
-  filter: drop-shadow(0 0 8px rgba(26,107,60,.6));
+  filter: drop-shadow(0 0 10px rgba(13,61,36,.6));
   transition: transform 0.15s;
 }
 
-/* SCORE STEPPER +/- dans les types de lieux */
-.score-stepper {
-  display:flex; align-items:center; gap:4px; margin-top:4px;
-}
-.score-btn {
-  width:16px; height:16px; border-radius:3px;
-  border:1px solid var(--border); background:var(--white);
-  color:var(--muted); font-size:.75rem; line-height:1;
-  cursor:pointer; display:flex; align-items:center; justify-content:center;
-  padding:0; transition:all .12s; flex-shrink:0;
-}
-.score-btn:hover { border-color:var(--green); color:var(--green); background:var(--green-light); }
-.score-val {
-  font-family:'DM Mono',monospace; font-size:.65rem;
-  color:var(--green); font-weight:700;
-  min-width:14px; text-align:center;
-}
+/* Walk time variants */
+.time-real { color:var(--forest); font-weight:500; }
+.time-est  { color:var(--ink-4); font-style:italic; }
 
-/* WALK TIME DISPLAY */
-.time-real { color:var(--green); }
-.time-est  { color:var(--muted); font-style:italic; }
-
-/* HELP TOOLTIPS — rendu via JS tooltip-global, jamais clippé par le panel */
+/* ════════ HELP TOOLTIPS ════════ */
 .help-icon {
   display:inline-flex; align-items:center; justify-content:center;
-  width:14px; height:14px; border-radius:50%; background:var(--border);
-  color:var(--muted); font-size:.58rem; font-weight:700; cursor:help;
-  margin-left:4px; position:relative; vertical-align:middle;
-  font-family:'DM Mono',monospace; flex-shrink:0;
+  width:13px; height:13px; border-radius:50%;
+  background:var(--paper-line); color:var(--ink-3);
+  font-size:.55rem; font-weight:600; cursor:help;
+  margin-left:4px; vertical-align:middle;
+  font-family:'JetBrains Mono', monospace; flex-shrink:0;
+  transition:all .12s;
 }
-.help-icon:hover { background:var(--green); color:#fff; }
+.help-icon:hover { background:var(--forest); color:var(--paper); }
 
-/* Tooltip global — position:fixed sur body, jamais clippé par overflow:hidden du panel */
 #tooltip-global {
   position:fixed; z-index:99999; pointer-events:none;
-  background:var(--text); color:#fff; padding:8px 10px; border-radius:4px;
-  font-size:.7rem; font-family:'DM Sans',sans-serif; font-weight:400;
-  white-space:normal; width:240px; line-height:1.4; letter-spacing:0;
-  text-transform:none; box-shadow:0 4px 12px rgba(0,0,0,.25);
+  background:var(--ink); color:var(--paper);
+  padding:9px 12px; border-radius:5px;
+  font-size:.72rem; font-family:'Inter Tight', sans-serif;
+  font-weight:400; white-space:normal;
+  width:240px; line-height:1.45; letter-spacing:0;
+  text-transform:none;
+  box-shadow:0 4px 16px rgba(0,0,0,.3);
   display:none; max-width:260px;
 }
 
-/* PREVIEW MARKER */
+/* ════════ ABOUT ════════ */
+.about-toggle {
+  cursor:pointer; user-select:none;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.about-toggle::before {
+  content:""; width:14px; height:1px; background:var(--ink-4);
+  margin-right:8px;
+}
+#aboutContent {
+  font-size:.74rem; line-height:1.6; color:var(--ink-3);
+  padding-top:6px;
+}
+#aboutContent p { margin-bottom:10px; }
+#aboutContent b { color:var(--ink); font-weight:600; }
+#aboutContent code {
+  font-family:'JetBrains Mono', monospace; font-size:.7rem;
+  background:var(--paper); padding:1px 5px; border-radius:3px;
+  border:1px solid var(--paper-line);
+  color:var(--ink-2);
+}
+
+/* Preview animation */
 @keyframes preview-pulse {
   from { opacity:0.55; transform:scale(1); }
   to   { opacity:0.85; transform:scale(1.08); }
 }
 
-/* UNDO CONTROL */
+/* Undo control */
 .undo-control button:not(:disabled):hover {
-  background:#e8f5ee !important; border-color:#1a6b3c !important;
+  background:var(--forest-soft) !important;
+  border-color:var(--forest) !important;
 }
 .undo-control button:disabled {
   opacity:0.4; cursor:not-allowed;
 }
 
-/* TOGGLE SWITCH */
-.toggle-switch { position:relative; display:inline-block; width:32px; height:18px; }
-.toggle-switch input { opacity:0; width:0; height:0; }
-.toggle-slider { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0;
-  background:var(--border); border-radius:18px; transition:.2s; }
-.toggle-slider:before { position:absolute; content:""; height:12px; width:12px;
-  left:3px; bottom:3px; background:white; border-radius:50%; transition:.2s; }
-.toggle-switch input:checked + .toggle-slider { background:var(--green); }
-.toggle-switch input:checked + .toggle-slider:before { transform:translateX(14px); }
+/* ════════ MODAL ════════ */
+#errorModal {
+  display:none; position:fixed; inset:0; z-index:100000;
+  background:rgba(13,61,36,.35);
+  backdrop-filter:blur(4px);
+  align-items:center; justify-content:center;
+}
+#errorModal > div {
+  background:var(--white);
+  border-radius:10px;
+  padding:28px 30px;
+  max-width:400px; width:90%;
+  box-shadow:var(--shadow-lg);
+  font-family:'Inter Tight', sans-serif;
+  border:1px solid var(--paper-line);
+}
 </style>
 </head>
 <body>
 
 <header>
   <div class="logo">D+</div>
-  <h1>Déploiement+</h1>
+  <h1>Déploiement<em>+</em></h1>
+  <div class="header-meta">
+    <span class="dot"></span>
+    <span>VALHALLA · OSM</span>
+  </div>
 </header>
 
 <div class="layout">
@@ -296,7 +769,7 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
             </div>
           </div>
           <div class="field">
-            <label>Temps de trajet max<span class="help-icon" data-tip="Plafond du temps de marche : aucun joueur ne sera placé au-delà. Combiné au temps de trajet min, définit la fenêtre [Tmin, Tmax].">ⓘ</span></label>
+            <label>Temps max<span class="help-icon" data-tip="Plafond du temps de marche : aucun joueur ne sera placé au-delà.">ⓘ</span></label>
             <input type="range" id="tMinutes" min="2" max="30" value="10"
               oninput="onTargetTimeInput(this.value)">
             <div class="range-val">
@@ -305,30 +778,27 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
           </div>
         </div>
 
-        <!-- FEATURE 2 : Temps minimum d'arrivée -->
-        <div class="field" style="margin-top:10px;">
-          <label>Temps de trajet min<span class="help-icon" data-tip="Plancher du temps de marche : aucun joueur ne sera placé en deçà. Mettre 0 pour accepter même les lieux très proches.">ⓘ</span></label>
+        <div class="field" style="margin-top:14px;">
+          <label>Temps min<span class="help-icon" data-tip="Plancher du temps de marche : aucun joueur ne sera placé en deçà. Mettre 0 pour accepter même les lieux très proches.">ⓘ</span></label>
           <input type="range" id="tMinMinutes" min="0" max="29" step="1" value="0"
             oninput="onMinTimeInput(this.value)">
           <div class="range-val">
-            <strong id="tMinVal">0</strong><small>min (0 = pas de minimum)</small>
+            <strong id="tMinVal">0</strong><small>min · 0 = aucun min</small>
           </div>
         </div>
 
-        <!-- FEATURE 1 : Distance min entre joueurs -->
-        <div class="field" style="margin-top:10px;">
-          <label>Distance min entre joueurs<span class="help-icon" data-tip="Distance minimale à vol d'oiseau entre deux joueurs sélectionnés. Évite que deux joueurs finissent côte à côte.">ⓘ</span></label>
+        <div class="field" style="margin-top:14px;">
+          <label>Distance min entre joueurs<span class="help-icon" data-tip="Distance minimale à vol d'oiseau entre deux joueurs sélectionnés.">ⓘ</span></label>
           <input type="range" id="minSpacing" min="0" max="500" step="10" value="0"
             oninput="document.getElementById('minSpacingVal').textContent=this.value">
           <div class="range-val">
-            <strong id="minSpacingVal">0</strong><small>m (vol d'oiseau)</small>
+            <strong id="minSpacingVal">0</strong><small>m · vol d'oiseau</small>
           </div>
         </div>
 
-        <!-- Vitesse de marche configurable -->
-        <div class="field" style="margin-top:10px;">
-          <label>Vitesse de marche<span class="help-icon" data-tip="Allure de marche moyenne. 3.5 km/h = marche normale, 5 km/h = soutenue, 12 km/h = vélo. Ajuste la précision Valhalla.">ⓘ</span></label>
-          <div style="display:flex; gap:4px; margin-bottom:6px; flex-wrap:wrap;">
+        <div class="field" style="margin-top:14px;">
+          <label>Vitesse de marche<span class="help-icon" data-tip="Allure moyenne. 3.5 km/h = marche normale, 5 km/h = soutenue, 12 km/h = vélo.">ⓘ</span></label>
+          <div class="speed-presets">
             <button class="btn-small" onclick="setSpeed(2.5)">🐢 2.5</button>
             <button class="btn-small active" id="speedPreset35" onclick="setSpeed(3.5)">🚶 3.5</button>
             <button class="btn-small" onclick="setSpeed(5)">🏃 5.0</button>
@@ -341,63 +811,64 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
           </div>
         </div>
 
-        <!-- Mode isochrone toggle -->
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;">
-          <label style="font-size:.68rem; font-weight:500; color:var(--muted); letter-spacing:.05em; text-transform:uppercase;">
-            Zone isochrone<span class="help-icon" data-tip="Active le calcul d'une zone réelle accessible en X minutes via Valhalla (moteur de routage piéton). Plus précis qu'un cercle, prend en compte les vraies rues.">ⓘ</span>
-          </label>
-          <div style="display:flex; gap:4px; align-items:center;">
+        <div class="toggle-row">
+          <label>Zone isochrone<span class="help-icon" data-tip="Active le calcul d'une zone réelle accessible en X minutes via Valhalla.">ⓘ</span></label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span id="isoBadge" class="iso-badge active">Valhalla</span>
             <label class="toggle-switch">
               <input type="checkbox" id="isochroneToggle" checked>
               <span class="toggle-slider"></span>
             </label>
-            <span id="isoBadge" class="iso-badge active" title="Valhalla est un moteur de routage piéton open-source qui calcule les vrais chemins (rues, escaliers, passages piétons).">Valhalla</span>
           </div>
         </div>
       </div>
 
-      <!-- Poids de scoring -->
+      <!-- Pondération -->
       <div class="section">
-        <div class="section-title">Pondération du score<span class="help-icon" data-tip="Chaque candidat reçoit un score 0-10 combinant 3 critères. Ajuste les curseurs pour favoriser un critère.">ⓘ</span></div>
-        <div style="display:flex; gap:6px; margin-bottom:8px;">
-          <button class="btn-small active" id="preset-balanced" onclick="applyPreset('balanced')">⚖️ Équilibré</button>
+        <div class="section-title">Pondération du score</div>
+        <div class="seg-control" style="margin-bottom:14px;">
+          <button class="btn-small active" id="preset-balanced" onclick="applyPreset('balanced')">⚖ Équilibré</button>
           <button class="btn-small" id="preset-comfort" onclick="applyPreset('comfort')">🛋 Confort</button>
-          <button class="btn-small" id="preset-discret" onclick="applyPreset('discret')">🫥 Discrétion</button>
+          <button class="btn-small" id="preset-discret" onclick="applyPreset('discret')">🫥 Discret</button>
         </div>
         <div class="weights-row">
           <div class="weight-field">
-            <label>Type<span class="help-icon" data-tip="Poids du type de lieu (parc=9, café=8, banc=5...). Plus le poids est élevé, plus le type prime.">ⓘ</span></label>
+            <label>Type<span class="help-icon" data-tip="Poids du type de lieu dans le tri.">ⓘ</span></label>
             <input type="range" id="wType" min="0" max="10" value="5" step="1"
               oninput="document.getElementById('wTypeVal').textContent=this.value">
             <div class="wval" id="wTypeVal">5</div>
           </div>
           <div class="weight-field">
-            <label>Confort<span class="help-icon" data-tip="Poids du confort : abrité, banc, éclairage, surface dure, accès libre, gratuit.">ⓘ</span></label>
+            <label>Confort<span class="help-icon" data-tip="Poids du confort : abrité, banc, éclairage, surface dure.">ⓘ</span></label>
             <input type="range" id="wComfort" min="0" max="10" value="3" step="1"
               oninput="document.getElementById('wComfortVal').textContent=this.value">
             <div class="wval" id="wComfortVal">3</div>
           </div>
-          <div class="weight-field">
-            <label>Discrétion<span class="help-icon" data-tip="Poids de la discrétion : couvert, arboré, peu fréquenté. Pénalise les belvédères, marchés, grandes places.">ⓘ</span></label>
-            <input type="range" id="wDiscretion" min="0" max="10" value="2" step="1"
-              oninput="document.getElementById('wDiscretionVal').textContent=this.value">
-            <div class="wval" id="wDiscretionVal">2</div>
+        </div>
+
+        <div class="field" style="margin-top:14px;">
+          <label>Impact discrétion<span class="help-icon" data-tip="Définit combien de points la discrétion peut ajouter ou retirer au score final.">ⓘ</span></label>
+          <input type="range" id="wDiscretion" min="0" max="10" step="1" value="3"
+            oninput="onDiscretionSlider(this.value)">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px;font-family:'JetBrains Mono', monospace;">
+            <span style="font-size:.65rem;color:var(--ink-3);">−<strong id="wDiscretionVal" style="color:var(--rust); font-weight:600;">3</strong> exposé</span>
+            <span style="font-size:.65rem;color:var(--ink-3);">+<strong style="color:var(--forest); font-weight:600;" id="wDiscretionValPos">3</strong> discret</span>
           </div>
         </div>
       </div>
 
       <!-- Types de lieux -->
       <div class="section">
-        <div class="section-title">Types de lieux<span class="help-icon" data-tip="Coche les types à rechercher. Ajuste le slider de chaque type pour modifier son poids dans le score (0 = ignoré, 10 = prioritaire).">ⓘ</span></div>
+        <div class="section-title">Types de lieux</div>
         <div class="select-all-row">
-          <button class="btn-small" onclick="toggleAll(true)">Tout cocher</button>
-          <button class="btn-small" onclick="toggleAll(false)">Tout décocher</button>
+          <button class="btn-small" onclick="toggleAll(true)">✓ Tout</button>
+          <button class="btn-small" onclick="toggleAll(false)">⊘ Aucun</button>
           <button class="btn-small" onclick="resetTypeScores()" title="Remettre les scores par défaut">↺ Scores</button>
         </div>
         <div class="place-grid" id="placeGrid"></div>
       </div>
 
-      <!-- Progress stepper -->
+      <!-- Progress -->
       <div class="progress-stepper" id="progressStepper">
         <div class="stepper-title">Progression</div>
         <div id="stepperContent"></div>
@@ -412,41 +883,43 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
       <!-- Résultats -->
       <div id="resultsList">
         <div class="empty-state">
-          <div class="big">◎</div>
-          <p>Choisis une adresse, un temps et les types de lieux, puis lance le déploiement.</p>
+          <div class="compass"><div class="compass-needle"></div></div>
+          <h3>Prêt à déployer</h3>
+          <p>Définis un point central, une fenêtre de temps et les types de lieux à rechercher.</p>
+          <div class="keys">
+            <kbd>⌘Z</kbd> annuler · <kbd>Esc</kbd> fermer
+          </div>
         </div>
       </div>
 
-      <!-- FEATURE 6 : Section À propos repliable -->
+      <!-- À propos -->
       <div class="section">
-        <div class="section-title" style="cursor:pointer; user-select:none;" onclick="toggleAbout()">
-          À propos · Aide <span id="aboutCaret">▾</span>
+        <div class="section-title about-toggle" onclick="toggleAbout()">
+          <span style="flex:1;">À propos · Aide</span>
+          <span id="aboutCaret" style="font-family:'JetBrains Mono', monospace;">▾</span>
         </div>
-        <div id="aboutContent" style="display:none; font-size:.72rem; line-height:1.5; color:var(--muted);">
-          <p style="margin-bottom:8px;"><b style="color:var(--text);">Comment ça marche ?</b><br>
-          L'outil place N points autour d'un point central dans la fenêtre de temps choisie. L'algorithme est glouton : il prend le meilleur lieu disponible, puis exclut tous les candidats trop proches (rayon = distance min), et recommence jusqu'à avoir N points.</p>
-          <p style="margin-bottom:8px;"><b style="color:var(--text);">Valhalla</b><br>
-          Moteur de routage piéton open-source qui calcule les vrais temps de marche en suivant les rues, escaliers, passages piétons. Bien plus précis qu'une estimation à vol d'oiseau.</p>
-          <p style="margin-bottom:8px;"><b style="color:var(--text);">Isochrone</b><br>
-          Polygone qui représente la zone réellement atteignable en X minutes. Sert à filtrer les candidats au lieu d'utiliser un simple cercle.</p>
-          <p style="margin-bottom:8px;"><b style="color:var(--text);">Score composite</b><br>
-          Chaque lieu reçoit un score 0-10 combinant : type de lieu (parcs ≫ bancs), confort (abri/bancs/éclairage), discrétion (couvert/calme).</p>
-          <p style="margin-bottom:8px;"><b style="color:var(--text);">Distance min entre joueurs</b><br>
-          Quand un point est placé, un disque de rayon = distance min est exclu autour de lui. Aucun autre joueur ne peut y être placé. Plus ce rayon est grand, plus les joueurs seront dispersés (mais moins tu peux en placer).</p>
-          <p style="margin-bottom:8px;"><b style="color:var(--text);">Fenêtre de temps</b><br>
-          Les deux sliders définissent une fenêtre <code>[Tmin, Tcible]</code>. Ex : Tmin=0, Tcible=10 → tous les lieux à 10 min ou moins. Tmin=5, Tcible=10 → uniquement les lieux entre 5 et 10 min.</p>
-          <p style="margin-bottom:8px;"><b style="color:var(--text);">Raccourcis</b><br>
-          <code>Ctrl/Cmd+Z</code> : annuler le dernier déplacement<br>
-          <code>Échap</code> : annuler une prévisualisation</p>
+        <div id="aboutContent" style="display:none;">
+          <p><b>Comment ça marche</b><br>
+          L'outil place N points autour d'un point central dans la fenêtre de temps choisie. L'algorithme glouton prend le meilleur lieu, exclut un disque autour, et recommence.</p>
+          <p><b>Valhalla</b><br>
+          Moteur de routage piéton open-source qui calcule les vrais temps de marche en suivant les rues, escaliers et passages piétons.</p>
+          <p><b>Score composite</b><br>
+          Type de lieu + confort + bonus/malus de discrétion. Lieux couverts, végétation, foules touristiques → bonus. Routes larges, places ouvertes, ponts → malus.</p>
+          <p><b>Fenêtre de temps</b><br>
+          <code>[Tmin, Tmax]</code>. Ex : <code>5–10 min</code> pour exclure les lieux trop proches.</p>
+          <p><b>Raccourcis</b><br>
+          <code>⌘Z</code> annuler · <code>Esc</code> fermer une prévisualisation</p>
         </div>
       </div>
 
-      <!-- FEATURE 5 : Input file caché pour import -->
       <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importVersion(event)">
     </div>
 
     <div class="panel-footer">
-      <button class="btn-run" id="btnRun" onclick="run()">▶ Déployer</button>
+      <button class="btn-run" id="btnRun" onclick="run()">
+        <span class="arrow">▸</span>
+        <span>Déployer</span>
+      </button>
       <div class="status" id="status"><div class="spinner"></div><span>En attente…</span></div>
     </div>
   </div>
@@ -454,23 +927,19 @@ header h1 { font-size:1rem; font-weight:700; color:var(--green); letter-spacing:
   <div id="map"></div>
 </div>
 
-<!-- Tooltip global (positionné par JS) -->
 <div id="tooltip-global"></div>
 
-<!-- Modal d'erreur bloquant -->
-<div id="errorModal" style="display:none;position:fixed;inset:0;z-index:100000;
-  background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;">
-  <div style="background:#fff;border-radius:8px;padding:24px 28px;max-width:380px;width:90%;
-              box-shadow:0 8px 32px rgba(0,0,0,.2);font-family:'DM Sans',sans-serif;">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-      <span style="font-size:1.4rem;">⚠️</span>
-      <b style="font-size:.95rem;color:#1a2e24;" id="modalTitle">Impossible de déployer</b>
+<div id="errorModal">
+  <div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+      <div style="width:36px;height:36px;border-radius:8px;background:var(--ochre-soft);display:flex;align-items:center;justify-content:center;font-size:1.1rem;">⚠</div>
+      <b style="font-size:1rem;color:var(--ink);font-family:'Fraunces',serif;font-weight:600;letter-spacing:-.01em;" id="modalTitle">Impossible de déployer</b>
     </div>
-    <p style="font-size:.82rem;color:#4a6e5a;line-height:1.55;margin-bottom:18px;" id="modalBody"></p>
+    <p style="font-size:.85rem;color:var(--ink-2);line-height:1.55;margin-bottom:20px;" id="modalBody"></p>
     <button onclick="closeModal()"
-      style="width:100%;padding:9px;background:#1a6b3c;color:#fff;border:none;
-             border-radius:4px;font-family:'DM Sans',sans-serif;font-weight:700;
-             font-size:.85rem;cursor:pointer;">
+      style="width:100%;padding:11px;background:var(--forest);color:var(--paper);border:none;
+             border-radius:6px;font-family:'Inter Tight',sans-serif;font-weight:600;
+             font-size:.85rem;cursor:pointer;letter-spacing:.02em;">
       Modifier les paramètres
     </button>
   </div>
@@ -492,22 +961,17 @@ window.D = {
   markers:       [],
   lines:         [],
   isochronePoly: null,
-  // FEATURE 4 : Undo
-  lastMove:      null,   // { playerIdx, prevCandidate, prevLineCoords }
-  // FEATURE 7 : Preview
+  lastMove:      null,
   previewMarker: null,
   previewLine:   null,
   previewLink:   null,
-  previewState:  null,   // { playerIdx, candidate, altKey, stateKey, originalCandidate }
+  previewState:  null,
   cache: {
     overpass: new Map(),
     osrm:     new Map(),
   }
 };
 
-// ═══════════════════════════════════════════════════════════
-// VALHALLA — Configuration centrale (SANS CLÉ API)
-// ═══════════════════════════════════════════════════════════
 const VALHALLA_BASE = 'https://valhalla1.openstreetmap.de';
 
 function getValhallaCosting() {
@@ -519,72 +983,106 @@ function getValhallaCostingOptions() {
   if (speedKmh > 6) {
     return { bicycle: { cycling_speed: speedKmh } };
   }
-  // Valhalla accepte walking_speed en km/h (range 0.5–25)
   return { pedestrian: { walking_speed: Math.max(0.5, Math.min(25, speedKmh)) } };
 }
 
-// ═══════════════════════════════════════════════════════════
-// TYPES DE LIEUX
-// ═══════════════════════════════════════════════════════════
+// Emoji icons per place type
+const ICON = {
+  park:           '🌳',
+  garden:         '🌿',
+  nature_reserve: '🦋',
+  pitch:          '⚽',
+  playground:     '🛝',
+  square:         '🏛',
+  viewpoint:      '🔭',
+  fountain:       '⛲',
+  bench:          '🪑',
+  shelter:        '🛖',
+  bus_stop:       '🚌',
+  tram_stop:      '🚃',
+  station:        '🚇',
+  cafe:           '☕',
+  bakery:         '🥐',
+  bar:            '🍺',
+  restaurant:     '🍽',
+  kiosk:          '📰',
+  marketplace:    '🏪',
+};
+
 const PLACE_TYPES = [
-  { id:"park",           label:"Parc",           icon:"🌳", score:9, group:"vert",
+  { id:"park",           label:"Parc",           icon:ICON.park,           score:9, group:"vert",
     query:(b)=>`node["leisure"="park"](${b});\n  way["leisure"="park"](${b});`,
     matchTags: t => t.leisure === 'park' },
-  { id:"garden",         label:"Jardin",          icon:"🌿", score:8, group:"vert",
+  { id:"garden",         label:"Jardin",         icon:ICON.garden,         score:8, group:"vert",
     query:(b)=>`node["leisure"="garden"](${b});\n  way["leisure"="garden"](${b});`,
     matchTags: t => t.leisure === 'garden' },
-  { id:"nature_reserve", label:"Réserve",         icon:"🦋", score:7, group:"vert",
+  { id:"nature_reserve", label:"Réserve",        icon:ICON.nature_reserve, score:7, group:"vert",
     query:(b)=>`node["leisure"="nature_reserve"](${b});\n  way["leisure"="nature_reserve"](${b});`,
     matchTags: t => t.leisure === 'nature_reserve' },
-  { id:"pitch",          label:"Terrain sport",   icon:"⚽", score:7, group:"vert",
+  { id:"pitch",          label:"Sport",          icon:ICON.pitch,          score:7, group:"vert",
     query:(b)=>`node["leisure"="pitch"](${b});\n  way["leisure"="pitch"](${b});`,
     matchTags: t => t.leisure === 'pitch' },
-  { id:"playground",     label:"Aire de jeux",    icon:"🛝", score:7, group:"vert",
+  { id:"playground",     label:"Aire de jeux",   icon:ICON.playground,     score:7, group:"vert",
     query:(b)=>`node["leisure"="playground"](${b});`,
     matchTags: t => t.leisure === 'playground' },
-  { id:"square",         label:"Place publique",  icon:"🏛", score:7, group:"vert",
+  { id:"square",         label:"Place",          icon:ICON.square,         score:7, group:"vert",
     query:(b)=>`node["place"="square"](${b});\n  way["place"="square"](${b});`,
     matchTags: t => t.place === 'square' },
-  { id:"viewpoint",      label:"Belvédère",       icon:"🔭", score:7, group:"vert",
+  { id:"viewpoint",      label:"Belvédère",      icon:ICON.viewpoint,      score:7, group:"vert",
     query:(b)=>`node["tourism"="viewpoint"](${b});`,
     matchTags: t => t.tourism === 'viewpoint' },
-  { id:"fountain",       label:"Fontaine",        icon:"⛲", score:6, group:"vert",
+  { id:"fountain",       label:"Fontaine",       icon:ICON.fountain,       score:6, group:"vert",
     query:(b)=>`node["amenity"="fountain"](${b});`,
     matchTags: t => t.amenity === 'fountain' },
-  { id:"bench",          label:"Bancs",           icon:"🪑", score:5, group:"urban",
+  { id:"bench",          label:"Bancs",          icon:ICON.bench,          score:5, group:"urban",
     query:(b)=>`node["amenity"="bench"](${b});`,
     matchTags: t => t.amenity === 'bench' },
-  { id:"shelter",        label:"Abri",            icon:"🛖", score:6, group:"urban",
+  { id:"shelter",        label:"Abri",           icon:ICON.shelter,        score:6, group:"urban",
     query:(b)=>`node["amenity"="shelter"](${b});`,
     matchTags: t => t.amenity === 'shelter' },
-  { id:"bus_stop",       label:"Arrêt bus",       icon:"🚌", score:5, group:"transit",
+  { id:"bus_stop",       label:"Bus",            icon:ICON.bus_stop,       score:5, group:"transit",
     query:(b)=>`node["highway"="bus_stop"](${b});`,
     matchTags: t => t.highway === 'bus_stop' },
-  { id:"tram_stop",      label:"Arrêt tram",      icon:"🚃", score:7, group:"transit",
+  { id:"tram_stop",      label:"Tram",           icon:ICON.tram_stop,      score:7, group:"transit",
     query:(b)=>`node["railway"="tram_stop"](${b});`,
     matchTags: t => t.railway === 'tram_stop' },
-  { id:"station",        label:"Gare / Métro",    icon:"🚇", score:8, group:"transit",
+  { id:"station",        label:"Gare/Métro",     icon:ICON.station,        score:8, group:"transit",
     query:(b)=>`node["railway"~"^(station|subway_entrance|halt)$"](${b});`,
     matchTags: t => /^(station|subway_entrance|halt)$/.test(t.railway) },
-  { id:"cafe",           label:"Café",            icon:"☕", score:8, group:"commerce",
+  { id:"cafe",           label:"Café",           icon:ICON.cafe,           score:8, group:"commerce",
     query:(b)=>`node["amenity"="cafe"](${b});`,
     matchTags: t => t.amenity === 'cafe' },
-  { id:"bakery",         label:"Boulangerie",     icon:"🥐", score:7, group:"commerce",
+  { id:"bakery",         label:"Boulangerie",    icon:ICON.bakery,         score:7, group:"commerce",
     query:(b)=>`node["shop"="bakery"](${b});`,
     matchTags: t => t.shop === 'bakery' },
-  { id:"bar",            label:"Bar",             icon:"🍺", score:6, group:"commerce",
+  { id:"bar",            label:"Bar",            icon:ICON.bar,            score:6, group:"commerce",
     query:(b)=>`node["amenity"="bar"](${b});`,
     matchTags: t => t.amenity === 'bar' },
-  { id:"restaurant",     label:"Restaurant",      icon:"🍽", score:5, group:"commerce",
+  { id:"restaurant",     label:"Restaurant",     icon:ICON.restaurant,     score:5, group:"commerce",
     query:(b)=>`node["amenity"="restaurant"](${b});`,
     matchTags: t => t.amenity === 'restaurant' },
-  { id:"kiosk",          label:"Kiosque",         icon:"📰", score:6, group:"commerce",
+  { id:"kiosk",          label:"Kiosque",        icon:ICON.kiosk,          score:6, group:"commerce",
     query:(b)=>`node["shop"~"^(kiosk|newsagent)$"](${b});`,
     matchTags: t => /^(kiosk|newsagent)$/.test(t.shop) },
-  { id:"marketplace",    label:"Marché",          icon:"🏪", score:6, group:"commerce",
+  { id:"marketplace",    label:"Marché",         icon:ICON.marketplace,    score:6, group:"commerce",
     query:(b)=>`node["amenity"="marketplace"](${b});`,
     matchTags: t => t.amenity === 'marketplace' },
 ];
+
+// Group colors keyed off the same palette
+const GROUP_COLOR = {
+  vert:     'var(--forest)',
+  urban:    'var(--ink-2)',
+  transit:  'var(--ochre)',
+  commerce: 'var(--rust)',
+};
+
+// Helper: render an icon emoji inline. Size in px (default 16).
+function iconChip(typeId, size = 16) {
+  const pt = PLACE_TYPES.find(p => p.id === typeId);
+  if (!pt) return `<span style="display:inline-block;width:${size}px;text-align:center;">·</span>`;
+  return `<span style="display:inline-block;font-size:${size}px;line-height:1;vertical-align:middle;">${pt.icon}</span>`;
+}
 
 const activeTypes = new Set(PLACE_TYPES.map(p=>p.id).filter(id=>id!=='restaurant'));
 
@@ -596,7 +1094,6 @@ function detectType(tags) {
   return null;
 }
 
-// Scores personnalisés par l'utilisateur (initialisés aux valeurs par défaut)
 const customScores = Object.fromEntries(PLACE_TYPES.map(p => [p.id, p.score]));
 
 function getTypeScore(id) {
@@ -614,7 +1111,7 @@ function buildPlaceGrid() {
     div.className = 'place-toggle' + (isActive ? ' active' : '');
     div.dataset.id = pt.id;
     div.innerHTML = `
-      <span class="pt-icon">${pt.icon}</span>
+      <span class="pt-icon" data-group="${pt.group}">${pt.icon}</span>
       <div class="pt-info">
         <div class="pt-name">${pt.label}</div>
         <div class="score-stepper" onclick="event.stopPropagation()">
@@ -647,12 +1144,6 @@ function changeTypeScore(id, delta) {
   if (lbl) lbl.textContent = customScores[id];
 }
 
-function onTypeScoreInput(id, val) {
-  customScores[id] = parseInt(val);
-  const lbl = document.getElementById('tsval-' + id);
-  if (lbl) lbl.textContent = val;
-}
-
 function resetTypeScores() {
   PLACE_TYPES.forEach(pt => { customScores[pt.id] = pt.score; });
   buildPlaceGrid();
@@ -664,9 +1155,6 @@ function toggleAll(on) {
 }
 buildPlaceGrid();
 
-// ═══════════════════════════════════════════════════════════
-// VITESSE
-// ═══════════════════════════════════════════════════════════
 function setSpeed(kmh) {
   document.getElementById('walkSpeed').value = kmh;
   document.getElementById('speedVal').textContent = kmh;
@@ -681,9 +1169,6 @@ function getOsrmProfile() {
   return getSpeedKmh() > 6 ? 'bicycle' : 'foot';
 }
 
-// ─────────────────────────────────────────────────────────
-// FEATURE 1, 2 : nouveaux getters
-// ─────────────────────────────────────────────────────────
 function getMinTimeMinutes() {
   return parseInt(document.getElementById('tMinMinutes').value) || 0;
 }
@@ -691,7 +1176,6 @@ function getMinSpacing() {
   return parseInt(document.getElementById('minSpacing').value) || 0;
 }
 
-// FEATURE 2 : auto-ajustement du slider min vs cible
 function onTargetTimeInput(val) {
   document.getElementById('tVal').textContent = val;
   const minSlider = document.getElementById('tMinMinutes');
@@ -706,7 +1190,6 @@ function onMinTimeInput(val) {
   document.getElementById('tMinVal').textContent = val;
 }
 
-// FEATURE 6 : toggle section À propos
 function toggleAbout() {
   const c = document.getElementById('aboutContent');
   const caret = document.getElementById('aboutCaret');
@@ -715,7 +1198,6 @@ function toggleAbout() {
   if (caret) caret.textContent = open ? '▴' : '▾';
 }
 
-// Facteur correction urbain (pour estimation rapide avant appel API)
 const URBAN_DETOUR_FACTOR = 1.35;
 
 function estimateWalkSec(distGeo, speedKmh) {
@@ -723,13 +1205,10 @@ function estimateWalkSec(distGeo, speedKmh) {
   return (distGeo * URBAN_DETOUR_FACTOR) / speedMs;
 }
 
-// ═══════════════════════════════════════════════════════════
-// PRESETS DE SCORING
-// ═══════════════════════════════════════════════════════════
 const SCORE_PRESETS = {
-  balanced: { type: 5, comfort: 3, discretion: 2 },
-  comfort:  { type: 3, comfort: 6, discretion: 1 },
-  discret:  { type: 2, comfort: 2, discretion: 6 },
+  balanced: { type: 5, comfort: 3, discretion: 3 },
+  comfort:  { type: 3, comfort: 7, discretion: 1 },
+  discret:  { type: 3, comfort: 2, discretion: 8 },
 };
 function applyPreset(name) {
   const p = SCORE_PRESETS[name];
@@ -740,6 +1219,7 @@ function applyPreset(name) {
   document.getElementById('wComfortVal').textContent = p.comfort;
   document.getElementById('wDiscretion').value = p.discretion;
   document.getElementById('wDiscretionVal').textContent = p.discretion;
+  document.getElementById('wDiscretionValPos').textContent = p.discretion;
   ['balanced','comfort','discret'].forEach(id => {
     document.getElementById('preset-'+id)?.classList.toggle('active', id === name);
   });
@@ -748,82 +1228,118 @@ function applyPreset(name) {
 function getWeights() {
   const t = parseInt(document.getElementById('wType').value) || 5;
   const c = parseInt(document.getElementById('wComfort').value) || 3;
-  const d = parseInt(document.getElementById('wDiscretion').value) || 2;
-  const total = t + c + d || 1;
-  return { type: t/total, comfort: c/total, discretion: d/total };
+  const total = t + c || 1;
+  return { type: t / total, comfort: c / total };
 }
 
-function computeDiscretion(tags) {
-  let score = 5;
-  if (tags.covered === 'yes' || tags.covered === 'arcade') score += 2;
-  if (tags.natural === 'tree_row' || tags.natural === 'wood') score += 1;
-  if (tags.tunnel === 'yes') score += 2;
-  if (tags.bridge === 'yes') score -= 1;
-  if (tags.tourism === 'viewpoint') score -= 2;
-  if (tags.amenity === 'marketplace') score -= 1;
-  if (tags.highway === 'primary' || tags.highway === 'secondary') score -= 2;
-  if (tags.name && tags.name.toLowerCase().includes('place')) score -= 1;
-  if (tags.access === 'private') score += 2;
-  return Math.max(0, Math.min(10, score));
+function getDiscretionMaxPts() {
+  return parseInt(document.getElementById('wDiscretion').value) || 0;
 }
 
-function computeComfort(tags) {
-  let score = 0;
-  if (tags.covered === 'yes' || tags.covered === 'arcade') score += 2;
-  if (tags.bench === 'yes') score += 1;
-  if (tags.shelter === 'yes') score += 1;
-  if (tags.lit === 'yes') score += 1;
-  if (['paving_stones','asphalt','concrete'].includes(tags.surface)) score += 1;
-  if (['yes','public','permissive'].includes(tags.access)) score += 1;
-  if (tags.fee === 'no') score += 1;
-  return Math.min(score, 10);
+function onDiscretionSlider(val) {
+  document.getElementById('wDiscretionVal').textContent = val;
+  document.getElementById('wDiscretionValPos').textContent = val;
+}
+
+const DISCRETION_MAX_RAW = 7.5;
+
+function computeDiscretionRaw(tags) {
+  let pts = 0;
+  if (tags.covered === 'yes' || tags.covered === 'arcade') pts += 2;
+  if (
+    tags.natural === 'wood' || tags.natural === 'scrub' ||
+    tags.natural === 'tree_row' || tags.natural === 'tree' ||
+    tags.landuse === 'forest' || tags.landuse === 'grass' ||
+    tags.leisure === 'garden' || tags.leisure === 'park'
+  ) pts += 0.5;
+  if (tags.tunnel === 'yes') pts += 2;
+  if (tags.amenity === 'bench') pts += 1;
+  if (
+    tags.tourism === 'attraction' || tags.tourism === 'viewpoint' ||
+    tags.tourism === 'museum' || tags.tourism === 'theme_park'
+  ) pts += 2;
+  if (tags.bridge === 'yes') pts -= 1;
+  if (
+    tags.place === 'square' ||
+    (tags.name && /\bplace\b/i.test(tags.name)) ||
+    tags.highway === 'pedestrian' ||
+    tags.amenity === 'marketplace'
+  ) pts -= 2;
+  if (tags.highway === 'trunk' || tags.highway === 'motorway' || tags.highway === 'primary') {
+    pts -= 4;
+  } else if (tags.highway === 'secondary' || tags.highway === 'tertiary' || tags.highway === 'road') {
+    pts -= 2;
+  }
+  return pts;
+}
+
+function computeDiscretionDisplay(tags) {
+  const raw = computeDiscretionRaw(tags);
+  const normalized = 5 + (raw / DISCRETION_MAX_RAW) * 5;
+  return Math.max(0, Math.min(10, normalized));
+}
+
+function computeDiscretionBonus(tags, maxPts) {
+  if (maxPts === 0) return 0;
+  const raw = computeDiscretionRaw(tags);
+  const ratio = Math.max(-1, Math.min(1, raw / DISCRETION_MAX_RAW));
+  return ratio * maxPts;
 }
 
 function computeScore(candidate) {
-  const weights = getWeights();
-  const typeBase = PLACE_TYPES.find(p => p.id === candidate.type);
-  // Utilise le score personnalisé par l'utilisateur si disponible
-  const rawScore  = typeBase ? getTypeScore(candidate.type) : 5;
-  const typeScore = rawScore / 10;
-  const comfortScore    = computeComfort(candidate.tags || {}) / 10;
-  const discretionScore = computeDiscretion(candidate.tags || {}) / 10;
-  return Math.round(
-    (weights.type * typeScore + weights.comfort * comfortScore + weights.discretion * discretionScore) * 10
-  );
+  const weights  = getWeights();
+  const maxPts   = getDiscretionMaxPts();
+  const rawType   = candidate.type ? getTypeScore(candidate.type) : 5;
+  const typeScore = rawType / 10;
+  const comfortScore = computeComfort(candidate.tags || {}) / 10;
+  const base = (weights.type * typeScore + weights.comfort * comfortScore) * 10;
+  const discretionBonus = computeDiscretionBonus(candidate.tags || {}, maxPts);
+  return Math.round(base + discretionBonus);
+}
+
+function computeComfort(tags) {
+  let s = 0;
+  if (tags.covered === 'yes' || tags.covered === 'arcade') s += 2;
+  if (tags.bench === 'yes' || tags.amenity === 'bench') s += 2;
+  if (tags.shelter === 'yes' || tags.amenity === 'shelter') s += 2;
+  if (tags.lit === 'yes') s += 1;
+  if (['paving_stones','asphalt','concrete'].includes(tags.surface)) s += 1;
+  if (['yes','public','permissive'].includes(tags.access)) s += 1;
+  if (tags.fee === 'no') s += 1;
+  return Math.min(10, s);
 }
 
 // ═══════════════════════════════════════════════════════════
-// MAP
+// MAP — Carto Voyager (more elegant default)
 // ═══════════════════════════════════════════════════════════
-const map = L.map('map').setView([46.2, 2.3], 6);
+const map = L.map('map', { zoomControl: true }).setView([46.2, 2.3], 6);
+const cartoVoyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  { attribution:'© OpenStreetMap © CARTO', maxZoom:19 });
 const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
   { attribution:'© OpenStreetMap © CARTO', maxZoom:19 });
 const satellite  = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
   { attribution:'© Esri, Maxar', maxZoom:19 });
 const osmStd     = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   { attribution:'© OpenStreetMap contributors', maxZoom:19 });
-cartoLight.addTo(map);
+cartoVoyager.addTo(map);
 L.control.layers(
-  { "🗺 Plan clair":cartoLight, "🛰 Satellite":satellite, "🗺 OSM Standard":osmStd },
-  {}, { position:'topright', collapsed:false }
+  { "🗺 Voyager":cartoVoyager, "📄 Plan clair":cartoLight, "🛰 Satellite":satellite, "🗺 OSM":osmStd },
+  {}, { position:'topright', collapsed:true }
 ).addTo(map);
 
 let drawnLayers = [], centerMarker = null;
-const COLORS = ["#1a6b3c","#e07b2a","#2d6fa3","#8b3ab8","#c0392b","#1a7a6e","#7d5a00","#1a4f7a","#5a3080","#8b2020"];
-const SECTOR_COLORS = ['#1a6b3c','#2d9e5f','#34c472','#7dcfa4','#b5e8ce'];
+const COLORS = ["#0d3d24","#b8862a","#2d6fa3","#8b3ab8","#a8442a","#1a7a6e","#7d5a00","#1a4f7a","#5a3080","#8b2020"];
+const SECTOR_COLORS = ['#0d3d24','#1a6b3c','#2d9e5f','#7dcfa4','#b5e8ce'];
 
-// ═══════════════════════════════════════════════════════════
-// STEPPER
-// ═══════════════════════════════════════════════════════════
 const STEPS_DEF = [
   { id:'geocode',   label:'Géocodage de l\'adresse' },
-  { id:'isochrone', label:'Zone isochrone (Valhalla)' },
+  { id:'isochrone', label:'Zone isochrone' },
   { id:'overpass',  label:'Recherche des lieux' },
   { id:'filter',    label:'Filtrage géodésique' },
-  { id:'sectors',   label:'Tri des candidats par score' },
-  { id:'osrm',      label:'Temps de marche (Valhalla)' },
+  { id:'sectors',   label:'Tri par score' },
+  { id:'osrm',      label:'Temps de marche' },
   { id:'select',    label:'Sélection optimale' },
-  { id:'enrich',    label:'Enrichissement des alternatives' },
+  { id:'enrich',    label:'Enrichissement' },
 ];
 
 function showStepper() {
@@ -850,19 +1366,12 @@ function setStep(id, status, detail='') {
   if (det && detail) det.textContent = detail;
 }
 
-// ═══════════════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════
-// MODAL D'ERREUR
-// ═══════════════════════════════════════════════════════════
 function showModal(title, body, blocking = true) {
   const modal = document.getElementById('errorModal');
   document.getElementById('modalTitle').textContent = title;
   document.getElementById('modalBody').textContent  = body;
   modal.style.display = 'flex';
   if (!blocking) {
-    // Non-bloquant : fermeture auto au clic en dehors
     modal.onclick = (e) => { if (e.target === modal) closeModal(); };
   } else {
     modal.onclick = null;
@@ -871,27 +1380,18 @@ function showModal(title, body, blocking = true) {
 function closeModal() {
   document.getElementById('errorModal').style.display = 'none';
 }
-// Fermeture par Échap
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
-    closeModal();
-  }
+  if (e.key === 'Escape') closeModal();
 });
 
-// ═══════════════════════════════════════════════════════════
-// TOOLTIP GLOBAL (positionné par JS pour ne jamais déborder)
-// ═══════════════════════════════════════════════════════════
 (function initTooltips() {
-  // S'assurer que le div est bien sur body (hors de tout overflow:hidden)
   let tip = document.getElementById('tooltip-global');
   if (!tip) {
     tip = document.createElement('div');
     tip.id = 'tooltip-global';
     document.body.appendChild(tip);
   }
-
   let hideTimer = null;
-
   document.addEventListener('mouseover', e => {
     const el = e.target.closest('[data-tip]');
     if (!el) return;
@@ -900,17 +1400,14 @@ document.addEventListener('keydown', e => {
     tip.style.display = 'block';
     positionTip(e, tip);
   });
-
   document.addEventListener('mousemove', e => {
     if (tip.style.display === 'block') positionTip(e, tip);
   });
-
   document.addEventListener('mouseout', e => {
     const el = e.target.closest('[data-tip]');
     if (!el) return;
     hideTimer = setTimeout(() => { tip.style.display = 'none'; }, 80);
   });
-
   function positionTip(e, tip) {
     const GAP  = 14;
     const tipW = tip.offsetWidth  || 240;
@@ -919,13 +1416,9 @@ document.addEventListener('keydown', e => {
     const vh   = window.innerHeight;
     let x = e.clientX + GAP;
     let y = e.clientY + GAP;
-    // Débordement droite → passer à gauche du curseur
     if (x + tipW > vw - GAP) x = e.clientX - tipW - GAP;
-    // Débordement gauche (rare)
     if (x < GAP) x = GAP;
-    // Débordement bas → passer au-dessus du curseur
     if (y + tipH > vh - GAP) y = e.clientY - tipH - GAP;
-    // Débordement haut (rare)
     if (y < GAP) y = GAP;
     tip.style.left = x + 'px';
     tip.style.top  = y + 'px';
@@ -949,19 +1442,6 @@ function bearing(o, p) {
   return (Math.atan2(Math.sin(dLon)*Math.cos(la2), Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dLon))*180/Math.PI+360)%360;
 }
 
-function greedyDisperse(pool, n) {
-  if (pool.length <= n) return pool;
-  const cl = {lat:pool.reduce((s,c)=>s+c.lat,0)/pool.length, lon:pool.reduce((s,c)=>s+c.lon,0)/pool.length};
-  let rem = [...pool].sort((a,b) => haversine(b,cl) - haversine(a,cl));
-  const sel = [rem.shift()];
-  while (sel.length < n && rem.length) {
-    let best=null, bs=-1;
-    for (const c of rem) { const d=Math.min(...sel.map(s=>haversine(c,s))); if(d>bs){bs=d;best=c;} }
-    sel.push(best); rem = rem.filter(c => c !== best);
-  }
-  return sel;
-}
-
 function detectBonuses(tags) {
   const b=[];
   if(tags.covered==='yes'||tags.covered==='arcade') b.push('🏠 abrité');
@@ -969,15 +1449,20 @@ function detectBonuses(tags) {
   if(tags.shelter==='yes') b.push('⛺ abri');
   if(tags.lit==='yes') b.push('💡 éclairé');
   if(['paving_stones','asphalt','concrete'].includes(tags.surface)) b.push('🚶 sol dur');
-  if(['yes','public','permissive'].includes(tags.access)) b.push('✅ accès public');
+  if(['yes','public','permissive'].includes(tags.access)) b.push('✅ public');
   if(tags.fee==='no') b.push('🆓 gratuit');
   return b;
 }
 
-function discretionBadge(score) {
-  if (score >= 7) return `<span style="color:#1a6b3c;">🫥 Discret (${score}/10)</span>`;
-  if (score >= 4) return `<span style="color:#c8970a;">👁 Modéré (${score}/10)</span>`;
-  return `<span style="color:#c0392b;">📢 Exposé (${score}/10)</span>`;
+function discretionBadge(tags) {
+  const disp  = computeDiscretionDisplay(tags || {});
+  const bonus = computeDiscretionBonus(tags || {}, getDiscretionMaxPts());
+  const sign  = bonus >= 0 ? '+' : '';
+  const bonusTxt = bonus !== 0 ? ` ${sign}${bonus.toFixed(1)}pts` : '';
+
+  if (disp >= 7)  return `<span style="color:var(--forest);">🫥 Discret${bonusTxt}</span>`;
+  if (disp >= 4)  return `<span style="color:var(--ochre);">👁 Modéré${bonusTxt}</span>`;
+  return `<span style="color:var(--rust);">📢 Exposé${bonusTxt}</span>`;
 }
 
 function clearMap() {
@@ -989,9 +1474,6 @@ function overpassCacheKey(bbox, types) {
   return bbox + '|' + [...types].sort().join(',');
 }
 
-// ═══════════════════════════════════════════════════════════
-// GÉOLOCALISATION
-// ═══════════════════════════════════════════════════════════
 let _geolocatedCenter = null;
 async function geolocateMe() {
   if (!navigator.geolocation) { setStatus('Géolocalisation non supportée','error'); return; }
@@ -1008,9 +1490,6 @@ async function geolocateMe() {
   );
 }
 
-// ═══════════════════════════════════════════════════════════
-// API CALLS
-// ═══════════════════════════════════════════════════════════
 async function geocode(address) {
   if (_geolocatedCenter && document.getElementById('address').value === _geolocatedCenter.display) {
     return _geolocatedCenter;
@@ -1022,13 +1501,9 @@ async function geocode(address) {
   return { lat:parseFloat(d[0].lat), lon:parseFloat(d[0].lon), display:d[0].display_name };
 }
 
-// ─────────────────────────────────────────────────────────
-// ISOCHRONE — Valhalla (avec vitesse custom)
-// ─────────────────────────────────────────────────────────
 async function getIsochrone(center, minutes, speedKmh) {
   const isoActive = document.getElementById('isochroneToggle').checked;
   if (!isoActive) return null;
-
   const body = {
     locations: [{ lat: center.lat, lon: center.lon }],
     costing: speedKmh > 6 ? 'bicycle' : 'pedestrian',
@@ -1036,7 +1511,6 @@ async function getIsochrone(center, minutes, speedKmh) {
     contours: [{ time: Math.round(minutes * 1.3) }],
     polygons: true,
   };
-
   try {
     const url = `${VALHALLA_BASE}/isochrone?json=` + encodeURIComponent(JSON.stringify(body));
     const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
@@ -1060,23 +1534,18 @@ function isInIsochrone(isoGeom, lat, lon) {
   } catch(e) { return true; }
 }
 
-// ─────────────────────────────────────────────────────────
-// OVERPASS — Recherche des lieux
-// ─────────────────────────────────────────────────────────
 async function fetchCandidates(bbox) {
   const cacheKey = overpassCacheKey(bbox, activeTypes);
   if (D.cache.overpass.has(cacheKey)) return D.cache.overpass.get(cacheKey);
-
   const lines = PLACE_TYPES.filter(pt=>activeTypes.has(pt.id)).map(pt=>pt.query(bbox)).join('\n  ');
   const query = `[out:json][timeout:30];\n(\n  ${lines}\n);\nout center tags;`;
   const servers = ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
-
   for (let i = 0; i < servers.length * 2; i++) {
     try {
       const r = await fetch(servers[i % servers.length], {
         method:'POST',
         body:'data='+encodeURIComponent(query),
-        headers:{'Content-Type':'application/x-www-form-urlencoded','User-Agent':'deploiement/2.0'}
+        headers:{'Content-Type':'application/x-www-form-urlencoded'}
       });
       if (r.ok) {
         const d = await r.json();
@@ -1095,19 +1564,14 @@ async function fetchCandidates(bbox) {
   throw new Error('Overpass inaccessible — réessaie dans quelques secondes');
 }
 
-// ─────────────────────────────────────────────────────────
-// MATRIX — Valhalla sources_to_targets (remplace OSRM table)
-// ─────────────────────────────────────────────────────────
 async function getWalkTimes(center, pool) {
   if (!pool.length) return [];
-
   const body = {
     sources: [{ lat: center.lat, lon: center.lon }],
     targets: pool.map(c => ({ lat: c.lat, lon: c.lon })),
     costing: getValhallaCosting(),
     costing_options: getValhallaCostingOptions(),
   };
-
   try {
     const r = await fetch(`${VALHALLA_BASE}/sources_to_targets`, {
       method: 'POST',
@@ -1117,7 +1581,6 @@ async function getWalkTimes(center, pool) {
     });
     if (!r.ok) throw new Error('Valhalla matrix HTTP ' + r.status);
     const d = await r.json();
-    // Réponse : { sources_to_targets: [[{time, distance}, ...]] }
     if (d.sources_to_targets && d.sources_to_targets[0]) {
       return d.sources_to_targets[0].map(cell =>
         cell && cell.time != null ? cell.time : 9999
@@ -1125,12 +1588,10 @@ async function getWalkTimes(center, pool) {
     }
     return pool.map(() => 9999);
   } catch (e) {
-    console.warn('Valhalla matrix failed, fallback OSRM:', e.message);
     return await getWalkTimesOSRM(center, pool);
   }
 }
 
-// Fallback OSRM matrix
 async function getWalkTimesOSRM(center, pool) {
   if (!pool.length) return [];
   const profile = getOsrmProfile();
@@ -1145,9 +1606,6 @@ async function getWalkTimesOSRM(center, pool) {
   }
 }
 
-// ─────────────────────────────────────────────────────────
-// ROUTE — Valhalla turn-by-turn (remplace OSRM route)
-// ─────────────────────────────────────────────────────────
 async function getWalkRoute(center, dest) {
   const body = {
     locations: [
@@ -1158,7 +1616,6 @@ async function getWalkRoute(center, dest) {
     costing_options: getValhallaCostingOptions(),
     directions_options: { units: 'kilometers' },
   };
-
   try {
     const r = await fetch(`${VALHALLA_BASE}/route`, {
       method: 'POST',
@@ -1173,13 +1630,11 @@ async function getWalkRoute(center, dest) {
       if (decoded.length) return decoded;
     }
   } catch (e) {
-    console.warn('Valhalla route failed, fallback OSRM:', e.message);
     return await getWalkRouteOSRM(center, dest);
   }
   return [[center.lat, center.lon], [dest.lat, dest.lon]];
 }
 
-// Décodeur polyline Valhalla (precision 6 par défaut)
 function decodeValhallaPolyline(encoded, precision = 6) {
   const factor = Math.pow(10, precision);
   let index = 0, lat = 0, lng = 0;
@@ -1204,7 +1659,6 @@ function decodeValhallaPolyline(encoded, precision = 6) {
   return coordinates;
 }
 
-// Fallback OSRM route
 async function getWalkRouteOSRM(center, dest) {
   const profile = getOsrmProfile();
   try {
@@ -1219,9 +1673,6 @@ async function getWalkRouteOSRM(center, dest) {
   return [[center.lat, center.lon], [dest.lat, dest.lon]];
 }
 
-// ─────────────────────────────────────────────────────────
-// CALCUL UNIQUE — Valhalla (pour dragend et swap)
-// ─────────────────────────────────────────────────────────
 async function calculateSingleWalkTime(from, to) {
   const body = {
     sources: [{ lat: from.lat, lon: from.lon }],
@@ -1243,7 +1694,6 @@ async function calculateSingleWalkTime(from, to) {
       }
     }
   } catch (e) {
-    // Fallback OSRM
     try {
       const url = `https://router.project-osrm.org/route/v1/${getOsrmProfile()}/${from.lon},${from.lat};${to.lon},${to.lat}?overview=false`;
       const rd = await (await fetch(url)).json();
@@ -1253,9 +1703,6 @@ async function calculateSingleWalkTime(from, to) {
   return null;
 }
 
-// ─────────────────────────────────────────────────────────
-// DÉNIVELÉ — Open-Elevation
-// ─────────────────────────────────────────────────────────
 async function getElevations(points) {
   try {
     const locs = points.map(p => `${p.lat},${p.lon}`).join('|');
@@ -1272,7 +1719,6 @@ function adjustTimeForElevation(walkMinutes, elevCenter, elevPoint) {
   return walkMinutes + (gain / 10);
 }
 
-// REVERSE GEOCODE
 async function reverseGeocode(lat, lon) {
   try {
     const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=18`,
@@ -1283,66 +1729,11 @@ async function reverseGeocode(lat, lon) {
   } catch(e) { return 'Position personnalisée'; }
 }
 
-// ═══════════════════════════════════════════════════════════
-// SECTEURS ADAPTATIFS (k-means angulaire)
-// ═══════════════════════════════════════════════════════════
-function circularMean(angles) {
-  const sinSum = angles.reduce((s,a) => s + Math.sin(a * Math.PI/180), 0);
-  const cosSum = angles.reduce((s,a) => s + Math.cos(a * Math.PI/180), 0);
-  return ((Math.atan2(sinSum, cosSum) * 180/Math.PI) + 360) % 360;
-}
-
 function angularDist(a, b) {
   const diff = Math.abs(a - b) % 360;
   return diff > 180 ? 360 - diff : diff;
 }
 
-function adaptiveSectors(candidates, N, iterations=10) {
-  if (!candidates.length) return Array.from({length:N}, () => []);
-  let centers = Array.from({length:N}, (_,i) => (i * 360/N));
-  for (let iter = 0; iter < iterations; iter++) {
-    const clusters = Array.from({length:N}, () => []);
-    for (const c of candidates) {
-      const brg = c.bearing;
-      let best = 0, bestDist = angularDist(brg, centers[0]);
-      for (let k = 1; k < N; k++) {
-        const d = angularDist(brg, centers[k]);
-        if (d < bestDist) { bestDist = d; best = k; }
-      }
-      clusters[best].push(c);
-    }
-    const newCenters = centers.map((oldC, k) => {
-      if (!clusters[k].length) return oldC;
-      return circularMean(clusters[k].map(c => c.bearing));
-    });
-    const moved = newCenters.some((nc, k) => angularDist(nc, centers[k]) > 0.5);
-    centers = newCenters;
-    if (!moved) break;
-  }
-  const finalClusters = Array.from({length:N}, () => []);
-  for (const c of candidates) {
-    let best = 0, bestDist = angularDist(c.bearing, centers[0]);
-    for (let k = 1; k < N; k++) {
-      const d = angularDist(c.bearing, centers[k]);
-      if (d < bestDist) { bestDist = d; best = k; }
-    }
-    finalClusters[best].push(c);
-  }
-  for (let k = 0; k < N; k++) {
-    if (finalClusters[k].length === 0) {
-      const biggestIdx = finalClusters.reduce((bi,cl,i) => cl.length > finalClusters[bi].length ? i : bi, 0);
-      if (finalClusters[biggestIdx].length > 1) {
-        const half = Math.floor(finalClusters[biggestIdx].length / 2);
-        finalClusters[k] = finalClusters[biggestIdx].splice(0, half);
-      }
-    }
-  }
-  return finalClusters;
-}
-
-// ═══════════════════════════════════════════════════════════
-// ENRICHISSEMENT ASYNC DES ALTERNATIVES
-// ═══════════════════════════════════════════════════════════
 async function enrichAllWalkTimes(center, candidates) {
   const BATCH_SIZE = 80;
   for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
@@ -1356,13 +1747,10 @@ async function enrichAllWalkTimes(center, candidates) {
           c.walkTimeIsReal = true;
         }
       });
-    } catch(e) { /* On continue même si un batch échoue */ }
+    } catch(e) {}
   }
 }
 
-// ═══════════════════════════════════════════════════════════
-// MAIN RUN
-// ═══════════════════════════════════════════════════════════
 async function run() {
   const address  = document.getElementById('address').value.trim();
   const N        = parseInt(document.getElementById('nPlayers').value);
@@ -1371,33 +1759,30 @@ async function run() {
   const speedKmh = getSpeedKmh();
   const K        = 8;
 
-  // ── VALIDATION avec modals bloquants ──────────────────
   if (!address) {
     showModal('Adresse manquante', 'Saisis une adresse ou utilise la géolocalisation GPS (📍) avant de déployer.');
     return;
   }
   if (activeTypes.size === 0) {
-    showModal('Aucun type de lieu sélectionné', 'Coche au moins un type de lieu (parc, café, arrêt de tram…) pour que l\'algorithme puisse chercher des candidats.');
+    showModal('Aucun type de lieu sélectionné', 'Coche au moins un type de lieu pour que l\'algorithme puisse chercher des candidats.');
     return;
   }
   if (tMin >= T) {
-    showModal('Fenêtre de temps invalide', `Le temps de trajet min (${tMin} min) doit être strictement inférieur au temps de trajet max (${T} min). Ajuste les deux sliders.`);
+    showModal('Fenêtre de temps invalide', `Le temps min (${tMin} min) doit être strictement inférieur au temps max (${T} min).`);
     return;
   }
 
   document.getElementById('btnRun').disabled = true;
   clearMap();
   document.getElementById('statsSection').style.display = 'none';
-  document.getElementById('resultsList').innerHTML = '<div class="empty-state"><div class="big">⏳</div><p>Calcul en cours…</p></div>';
+  document.getElementById('resultsList').innerHTML = '<div class="empty-state"><div class="compass"><div class="compass-needle" style="animation:spin 1.4s linear infinite;"></div></div><h3>Déploiement en cours</h3><p>Calcul des positions optimales…</p></div>';
 
   D.altRegistry  = {};
   D.popupState   = {};
   D.isochronePoly = null;
-
   showStepper();
 
   try {
-    // ── ÉTAPE 1 : GEOCODAGE ──────────────────────────────
     setStatus('Géocodage…','running');
     setStep('geocode','running');
     const center = await geocode(address);
@@ -1406,11 +1791,10 @@ async function run() {
 
     centerMarker = L.marker([center.lat, center.lon], {
       icon: L.divIcon({ className:'',
-        html:`<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid #1a6b3c;box-shadow:0 0 10px rgba(26,107,60,.4);"></div>`,
-        iconSize:[18,18], iconAnchor:[9,9] })
-    }).addTo(map).bindPopup(`<b>Point central</b><br><small style="color:#7a9e8a;">${center.display}</small>`);
+        html:`<div style="width:20px;height:20px;border-radius:50%;background:#fdfbf5;border:3px solid #0d3d24;box-shadow:0 0 0 4px rgba(13,61,36,.15), 0 2px 8px rgba(13,61,36,.3);"></div>`,
+        iconSize:[20,20], iconAnchor:[10,10] })
+    }).addTo(map).bindPopup(`<b style="font-family:'Fraunces',serif;">Point central</b><br><small style="color:#6b6f68;">${center.display}</small>`);
 
-    // ── ÉTAPE 2 : ISOCHRONE Valhalla ─────────────────────
     setStep('isochrone','running');
     setStatus('Zone isochrone (Valhalla)…','running');
     let isoGeom = null;
@@ -1420,46 +1804,38 @@ async function run() {
       if (isoGeom) {
         try {
           const isoLayer = L.geoJSON({ type:'Feature', geometry:isoGeom }, {
-            style: { color:'#1a6b3c', weight:2, opacity:0.5, fillOpacity:0.06, fillColor:'#1a6b3c', dashArray:'6 4' }
+            style: { color:'#0d3d24', weight:1.5, opacity:0.5, fillOpacity:0.05, fillColor:'#0d3d24', dashArray:'5 4' }
           }).addTo(map);
           drawnLayers.push(isoLayer);
           document.getElementById('isoBadge').textContent = 'Valhalla ✓';
           document.getElementById('isoBadge').className = 'iso-badge active';
         } catch(e) {}
-        setStep('isochrone','done','Polygone isochrone chargé');
+        setStep('isochrone','done','Polygone chargé');
       } else {
-        document.getElementById('isoBadge').textContent = 'bbox (fallback)';
+        document.getElementById('isoBadge').textContent = 'bbox';
         document.getElementById('isoBadge').className = 'iso-badge fallback';
-        setStep('isochrone','skip','Valhalla indisponible → bbox');
+        setStep('isochrone','skip','Fallback bbox');
       }
     } else {
       setStep('isochrone','skip','Désactivé');
-      document.getElementById('isoBadge').textContent = 'Désactivé';
+      document.getElementById('isoBadge').textContent = 'off';
       document.getElementById('isoBadge').className = 'iso-badge fallback';
     }
 
-    // ── ÉTAPE 3 : OVERPASS ───────────────────────────────
     setStep('overpass','running');
     setStatus(`Recherche des lieux (${activeTypes.size} types)…`,'running');
-
     const speedMs = speedKmh * 1000 / 3600;
     const T_sec   = T * 60;
     const rBbox   = T_sec * speedMs * 1.6;
     const dLat    = rBbox / 111320;
     const dLon    = rBbox / (111320 * Math.cos(center.lat * Math.PI/180));
     const bbox    = `${center.lat-dLat},${center.lon-dLon},${center.lat+dLat},${center.lon+dLon}`;
-
     const elements = await fetchCandidates(bbox);
-    setStep('overpass','done', `${elements.length} éléments récupérés`);
+    setStep('overpass','done', `${elements.length} éléments`);
 
-    // ── ÉTAPE 4 : FILTRAGE ────────────────────────────────
     setStep('filter','running');
     setStatus('Filtrage et scoring…','running');
-
-    // Mode plafond : rMin basé sur Tmin (0 par défaut), rMax sur T+marge
     const tMinSec = getMinTimeMinutes() * 60;
-    // Marge pour absorber l'imprécision de l'estimation distance→temps
-    // (le vrai filtrage strict se fait après le calcul Valhalla)
     const rMin = tMinSec > 0 ? tMinSec * speedMs * 0.7 : 0;
     const rMax = T_sec * speedMs * 1.8;
 
@@ -1478,13 +1854,11 @@ async function run() {
       const brg      = bearing(center, {lat:clat, lon:clon});
       const pseudoCand = { type:ptype, tags, lat:clat, lon:clon };
       const compScore  = computeScore(pseudoCand);
-      const discretion = computeDiscretion(tags);
       candidates.push({
         lat: clat, lon: clon,
         name: tags.name || tags['name:fr'] || ptype,
         type: ptype,
         wait_score: compScore,
-        discretion_score: discretion,
         tags, bonuses,
         dist_geo: distGeo,
         bearing:  brg,
@@ -1495,32 +1869,22 @@ async function run() {
     }
 
     if (candidates.length < N) {
-      throw new Error(`Seulement ${candidates.length} lieux trouvés pour ${N} joueurs. Élargis la sélection ou augmente le temps.`);
+      throw new Error(`Seulement ${candidates.length} lieux trouvés pour ${N} joueurs.`);
     }
-    setStep('filter','done', `${candidates.length} candidats valides`);
+    setStep('filter','done', `${candidates.length} candidats`);
     D.geoFiltered = candidates;
 
-    // ── ÉTAPE 5 : TRI PAR SCORE — algo glouton sans secteurs ──
     setStep('sectors','running');
-    setStatus('Tri des candidats par score…','running');
-
-    // Tri global : meilleur score d'abord, tiebreak sur walk_sec (le plus proche du milieu de fenêtre)
     const midSec = (tMinSec + T_sec) / 2;
     const sorted = [...candidates].sort((a,b) =>
       b.wait_score - a.wait_score || Math.abs(a.walk_sec - midSec) - Math.abs(b.walk_sec - midSec)
     );
-    setStep('sectors','done', `${sorted.length} candidats triés par score`);
+    setStep('sectors','done', `${sorted.length} triés`);
 
-    // ── ÉTAPE 6 : VALHALLA MATRIX — on calcule sur les meilleurs candidats ──
     setStep('osrm','running');
-    // On prend le top K*N candidats pour avoir assez de choix après exclusion des disques
-    // Avec N jusqu'à 100, K*N peut être grand → on plafonne à 500 pour Valhalla
     const BATCH_LIMIT = Math.min(500, K * N * 3);
     const prePool = sorted.slice(0, BATCH_LIMIT);
-
     setStatus(`Calcul Valhalla matrix (${prePool.length} lieux)…`,'running');
-
-    // Valhalla accepte ~100 targets par requête : on batche si nécessaire
     const VALHALLA_BATCH = 80;
     for (let b = 0; b < prePool.length; b += VALHALLA_BATCH) {
       const batch = prePool.slice(b, b + VALHALLA_BATCH);
@@ -1532,57 +1896,39 @@ async function run() {
           c.walkTimeIsReal = true;
         }
       });
-      setStatus(`Valhalla matrix… ${Math.min(b + VALHALLA_BATCH, prePool.length)}/${prePool.length}`, 'running');
+      setStatus(`Valhalla… ${Math.min(b + VALHALLA_BATCH, prePool.length)}/${prePool.length}`, 'running');
     }
     D.prePool = prePool;
-    setStep('osrm','done', `${prePool.length} temps calculés (Valhalla)`);
+    setStep('osrm','done', `${prePool.length} temps`);
 
-    // ── ÉTAPE 7 : SÉLECTION GLOUTON PAR SCORE avec exclusion de disque ──
     setStep('select','running');
     setStatus('Sélection optimale…','running');
-
     const minSpacing = getMinSpacing();
     const selected = [];
-
-    // Pool valide : fenêtre [Tmin, Tmax] avec temps Valhalla réels
     const validPool = prePool.filter(c =>
       c.walkTimeIsReal &&
       c.walk_sec >= tMinSec &&
       c.walk_sec <= T_sec
     ).sort((a,b) => b.wait_score - a.wait_score || Math.abs(a.walk_sec - midSec) - Math.abs(b.walk_sec - midSec));
 
-    // Algo glouton : on place chaque point un par un, en excluant le disque
-    // de rayon minSpacing autour de chaque point déjà placé
     for (const cand of validPool) {
       if (selected.length >= N) break;
-      // Vérifier que le candidat n'est pas dans la zone d'exclusion d'un point déjà placé
       const tooClose = minSpacing > 0 && selected.some(s => haversine(s, cand) < minSpacing);
       if (tooClose) continue;
       selected.push(cand);
     }
 
     if (!selected.length) {
-      showModal(
-        'Aucun résultat',
-        `Aucun lieu ne correspond à la fenêtre [${getMinTimeMinutes()}–${T} min]. Essaie d'augmenter le temps de trajet max, de baisser le minimum, ou d'élargir les types de lieux.`
-      );
+      showModal('Aucun résultat', `Aucun lieu ne correspond à la fenêtre [${getMinTimeMinutes()}–${T} min].`);
       throw new Error('Aucun candidat valide — voir modal');
     }
-
     if (selected.length < N) {
-      const missing = N - selected.length;
-      showModal(
-        `${selected.length}/${N} positions trouvées`,
-        `Seulement ${selected.length} lieux respectent les contraintes (fenêtre [${getMinTimeMinutes()}–${T} min]${minSpacing > 0 ? `, distance min ${minSpacing}m` : ''}).\n\nPour trouver ${missing} joueurs supplémentaires : augmente le temps max, baisse la distance min entre joueurs, ou ajoute d'autres types de lieux.`,
-        false  // non-bloquant : on affiche ce qu'on a
-      );
+      showModal(`${selected.length}/${N} positions trouvées`, `Seulement ${selected.length} lieux respectent les contraintes.`, false);
     }
 
-    const selectMsg = `${selected.length}/${N} positions sélectionnées`;
-    setStep('select', selected.length < N ? 'error' : 'done', selectMsg);
+    setStep('select', selected.length < N ? 'error' : 'done', `${selected.length}/${N}`);
     D.selected = selected;
 
-    // ── ÉTAPE 8 : DÉNIVELÉ ───────────────────────────────
     let centerElev = null;
     try {
       const elevs = await getElevations([center, ...selected]);
@@ -1595,37 +1941,30 @@ async function run() {
           p.elev_gain    = Math.max(0, p.elevation - centerElev);
         }
       });
-    } catch(e) { /* Dénivelé optionnel */ }
+    } catch(e) {}
 
-    // ── ÉTAPE 9 : ITINÉRAIRES RÉELS Valhalla ─────────────
     setStep('enrich','running');
-    setStatus('Tracé des itinéraires (Valhalla)…','running');
-
+    setStatus('Tracé des itinéraires…','running');
     renderResults(selected, center, N, T, T_sec);
 
-    // Remplacer les lignes droites par les itinéraires réels en arrière-plan
     for (let i = 0; i < selected.length; i++) {
       (async (idx) => {
         const routeCoords = await getWalkRoute(center, selected[idx]);
         if (D.lines[idx]) {
           D.lines[idx].setLatLngs(routeCoords);
-          D.lines[idx].setStyle({ dashArray: null, opacity: 0.4, weight: 2.5, color: COLORS[idx % COLORS.length] });
+          D.lines[idx].setStyle({ dashArray: null, opacity: 0.55, weight: 3, color: COLORS[idx % COLORS.length] });
         }
       })(i);
     }
-
-    // Enrichir les temps de marche des alternatives en arrière-plan
     enrichAllWalkTimes(center, D.geoFiltered.filter(c => !D.selected.includes(c))).then(() => {
-      setStep('enrich','done','Alternatives enrichies (Valhalla) ✓');
+      setStep('enrich','done','Alternatives ✓');
       setStatus(`${selected.length} positions trouvées ✓`, 'ok');
     });
 
   } catch(e) {
-    // Si le modal a déjà été affiché, on ne répète pas le message
     if (!e.message.includes('voir modal')) {
       setStatus('Erreur : ' + e.message, 'error');
       setStep('select','error', e.message);
-      // Afficher aussi en modal pour les erreurs inattendues
       if (!e.message.includes('Aucun candidat')) {
         showModal('Erreur inattendue', e.message, false);
       }
@@ -1635,9 +1974,6 @@ async function run() {
   document.getElementById('btnRun').disabled = false;
 }
 
-// ═══════════════════════════════════════════════════════════
-// RENDER RESULTS
-// ═══════════════════════════════════════════════════════════
 function renderResults(selected, center, N, T, T_sec) {
   D.markers = [];
   D.lines   = [];
@@ -1651,7 +1987,6 @@ function renderResults(selected, center, N, T, T_sec) {
       dists.push(haversine(selected[i], selected[j]));
 
   document.getElementById('statsSection').style.display = '';
-  // Mode plafond : la fenêtre est [Tmin, T]
   const _tMin    = getMinTimeMinutes();
   const _spacing = getMinSpacing();
 
@@ -1660,52 +1995,25 @@ function renderResults(selected, center, N, T, T_sec) {
     <div class="stat-row"><span>Écart-type</span><b>${std.toFixed(2)} min</b></div>
     <div class="stat-row"><span>Min / Max</span><b>${Math.min(...wm).toFixed(1)} / ${Math.max(...wm).toFixed(1)} min</b></div>
     <div class="stat-row"><span>Fenêtre demandée</span><b>${_tMin}–${T} min</b></div>
-    <div class="stat-row"><span>Distance min inter-joueurs</span><b>${Math.round(Math.min(...dists))} m</b></div>
-    <div class="stat-row"><span>Distance max inter-joueurs</span><b>${Math.round(Math.max(...dists))} m</b></div>
+    <div class="stat-row"><span>Distance min inter</span><b>${Math.round(Math.min(...dists))} m</b></div>
+    <div class="stat-row"><span>Distance max inter</span><b>${Math.round(Math.max(...dists))} m</b></div>
     ${_spacing > 0 ? `<div class="stat-row"><span>Distance min imposée</span><b>${_spacing} m</b></div>` : ''}
-    <div class="stat-row"><span>Moteur de routage</span><b>Valhalla ✓</b></div>
-    <div style="margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-      <button onclick="exportCSV()" style="padding:7px;border:1px solid #1a6b3c;
-        background:#e8f5ee;color:#1a6b3c;font-family:'DM Sans',sans-serif;font-size:.72rem;
-        font-weight:600;cursor:pointer;border-radius:2px;"
-        onmouseover="this.style.background='#1a6b3c';this.style.color='#fff';"
-        onmouseout="this.style.background='#e8f5ee';this.style.color='#1a6b3c';">↓ CSV</button>
-      <button onclick="exportGPX()" style="padding:7px;border:1px solid #2d6fa3;
-        background:#e8f0fa;color:#2d6fa3;font-family:'DM Sans',sans-serif;font-size:.72rem;
-        font-weight:600;cursor:pointer;border-radius:2px;"
-        onmouseover="this.style.background='#2d6fa3';this.style.color='#fff';"
-        onmouseout="this.style.background='#e8f0fa';this.style.color='#2d6fa3';">↓ GPX</button>
-      <button onclick="exportVersion()" style="padding:7px;border:1px solid #8b3ab8;
-        background:#f3eafa;color:#8b3ab8;font-family:'DM Sans',sans-serif;font-size:.72rem;
-        font-weight:600;cursor:pointer;border-radius:2px;"
-        onmouseover="this.style.background='#8b3ab8';this.style.color='#fff';"
-        onmouseout="this.style.background='#f3eafa';this.style.color='#8b3ab8';">💾 Sauver version</button>
-      <button onclick="document.getElementById('importFile').click()" style="padding:7px;border:1px solid #e07b2a;
-        background:#fdf2e8;color:#e07b2a;font-family:'DM Sans',sans-serif;font-size:.72rem;
-        font-weight:600;cursor:pointer;border-radius:2px;"
-        onmouseover="this.style.background='#e07b2a';this.style.color='#fff';"
-        onmouseout="this.style.background='#fdf2e8';this.style.color='#e07b2a';">📂 Charger version</button>
-      <button onclick="exportMapPNG()" style="padding:7px;border:1px solid #2d6fa3;
-        background:#e8f0fa;color:#2d6fa3;font-family:'DM Sans',sans-serif;font-size:.72rem;
-        font-weight:600;cursor:pointer;border-radius:2px;grid-column:span 2;"
-        onmouseover="this.style.background='#2d6fa3';this.style.color='#fff';"
-        onmouseout="this.style.background='#e8f0fa';this.style.color='#2d6fa3';">🖼 Exporter carte (PNG)</button>
+    <div class="stat-row"><span>Routage</span><b>Valhalla ✓</b></div>
+    <div style="margin-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+      <button onclick="exportCSV()" class="btn-small" style="padding:8px;">↓ CSV</button>
+      <button onclick="exportGPX()" class="btn-small" style="padding:8px;">↓ GPX</button>
+      <button onclick="exportVersion()" class="btn-small" style="padding:8px;">💾 Sauver</button>
+      <button onclick="document.getElementById('importFile').click()" class="btn-small" style="padding:8px;">📂 Charger</button>
+      <button onclick="exportMapPNG()" class="btn-small" style="padding:8px; grid-column:span 2;">🖼 Exporter carte (PNG)</button>
     </div>`;
 
-  // ── Cercles d'exclusion (zone interdite autour de chaque point placé)
   const minSpacingViz = getMinSpacing();
   if (minSpacingViz > 0) {
     selected.forEach((p, i) => {
       const color = COLORS[i % COLORS.length];
       const circle = L.circle([p.lat, p.lon], {
-        radius: minSpacingViz,
-        color,
-        weight: 1,
-        opacity: 0.35,
-        fillColor: color,
-        fillOpacity: 0.06,
-        dashArray: '4 4',
-        interactive: false,
+        radius: minSpacingViz, color, weight: 1, opacity: 0.35,
+        fillColor: color, fillOpacity: 0.06, dashArray: '4 4', interactive: false,
       }).addTo(map);
       drawnLayers.push(circle);
     });
@@ -1714,35 +2022,46 @@ function renderResults(selected, center, N, T, T_sec) {
   const list = document.getElementById('resultsList');
   list.innerHTML = '';
 
+  // Header band for results
+  const header = document.createElement('div');
+  header.style.cssText = 'padding:14px 22px 8px; border-bottom:1px solid var(--paper-line);';
+  header.innerHTML = `
+    <div style="font-family:'JetBrains Mono', monospace; font-size:.62rem; font-weight:500;
+                letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3);
+                display:flex; align-items:center; gap:8px;">
+      <span style="width:14px; height:1px; background:var(--ink-4);"></span>
+      <span>Positions · ${selected.length}</span>
+    </div>`;
+  list.appendChild(header);
+
   selected.forEach((p, i) => {
     const color   = COLORS[i % COLORS.length];
     const ptDef   = PLACE_TYPES.find(pt => pt.id === p.type);
-    const icon    = ptDef ? ptDef.icon : '📍';
+    const icon    = iconChip(p.type, 16);
     const stars   = '★'.repeat(Math.min(p.wait_score,10)) + '☆'.repeat(Math.max(0,10-p.wait_score));
     const walkMin = p.walk_min_adj || p.walk_min;
     const timeLabel = p.walkTimeIsReal
       ? `<span class="time-real">⏱ ${walkMin.toFixed(1)} min</span>`
       : `<span class="time-est">⏱ ~${walkMin.toFixed(1)} min</span>`;
-
     const elevHtml = p.elev_gain > 0
-      ? `<div style="font-size:.63rem;color:#c8970a;margin-top:2px;">↗ +${Math.round(p.elev_gain)}m (≈ +${(p.elev_gain/10).toFixed(1)} min)</div>`
+      ? `<div style="font-size:.63rem;color:var(--ochre);margin-top:3px;font-family:'JetBrains Mono', monospace;">↗ +${Math.round(p.elev_gain)}m</div>`
       : '';
 
     const popup = buildAlternativesPopup(i, p, color);
 
     const line = L.polyline([[center.lat,center.lon],[p.lat,p.lon]], {
-      color: COLORS[i%COLORS.length], opacity:0.2, weight:1.5, dashArray:'5 7'
+      color: COLORS[i%COLORS.length], opacity:0.25, weight:1.5, dashArray:'5 7'
     }).addTo(map);
 
     const marker = L.marker([p.lat, p.lon], {
       draggable: true,
       icon: L.divIcon({ className:'',
-        html:`<div style="width:30px;height:30px;border-radius:5px;background:${color};color:#fff;
-              display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;
-              font-weight:700;font-size:13px;border:2px solid rgba(0,0,0,.12);
-              box-shadow:0 2px 8px rgba(0,0,0,.2);cursor:grab;">${i+1}</div>`,
-        iconSize:[30,30], iconAnchor:[15,15] })
-    }).addTo(map).bindPopup(popup, {maxWidth:270});
+        html:`<div style="width:32px;height:32px;border-radius:6px;background:${color};color:#fdfbf5;
+              display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;
+              font-weight:600;font-size:13px;border:2px solid rgba(255,255,255,.5);
+              box-shadow:0 2px 8px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.15);cursor:grab;">${i+1}</div>`,
+        iconSize:[32,32], iconAnchor:[16,16] })
+    }).addTo(map).bindPopup(popup, {maxWidth:280});
 
     marker.on('drag', e => {
       const ll = e.target.getLatLng();
@@ -1750,17 +2069,14 @@ function renderResults(selected, center, N, T, T_sec) {
     });
 
     marker.on('dragend', async e => {
-      // FEATURE 4 : sauvegarde l'état précédent pour undo
       saveLastMove(i);
-
       const ll = e.target.getLatLng();
       const newName = await reverseGeocode(ll.lat, ll.lng);
-      // Utilise Valhalla pour le calcul à la volée
       const sec = await calculateSingleWalkTime(center, { lat: ll.lat, lon: ll.lng });
       const walkM = sec != null ? sec / 60 : p.walk_min;
       D.selected[i] = { ...D.selected[i], lat:ll.lat, lon:ll.lng, name:newName,
         walk_min:walkM, walk_sec:walkM*60, walk_min_adj:null, bonuses:[], wait_score:5,
-        type:'custom', tags:{}, walkTimeIsReal: sec != null, discretion_score:5 };
+        type:'custom', tags:{}, walkTimeIsReal: sec != null };
       const updPop = buildAlternativesPopup(i, D.selected[i], color);
       marker.setPopupContent(updPop);
       marker.openPopup();
@@ -1768,7 +2084,6 @@ function renderResults(selected, center, N, T, T_sec) {
       if (nameEl) nameEl.textContent = newName;
       const metaEl = document.getElementById('result-meta-'+i);
       if (metaEl) metaEl.innerHTML = `<span>📍 déplacé</span><span class="time-real">⏱ ${walkM.toFixed(1)} min</span>`;
-      // Retrace la route via Valhalla
       getWalkRoute(center, D.selected[i]).then(coords => line.setLatLngs(coords));
     });
 
@@ -1783,15 +2098,12 @@ function renderResults(selected, center, N, T, T_sec) {
       <div class="result-info">
         <div class="result-name" id="result-name-${i}">${p.name}</div>
         <div class="result-meta" id="result-meta-${i}">
-          <span>${icon} ${p.type}</span>${timeLabel}
+          <span style="display:inline-flex;align-items:center;gap:5px;">${icon}<span>${p.type}</span></span>${timeLabel}
         </div>
-        <div class="result-stars">${stars} ${p.wait_score}/10</div>
+        <div class="result-stars">${stars} <span style="font-family:'JetBrains Mono',monospace;font-size:.66rem;">${p.wait_score}/10</span></div>
         ${elevHtml}
-        <div class="result-discretion">${discretionBadge(p.discretion_score)}</div>
+        <div class="result-discretion">${discretionBadge(p.tags)}</div>
         ${p.bonuses.length ? `<div class="result-bonus">${p.bonuses.join(' · ')}</div>` : ''}
-        <div style="font-size:.62rem;color:#aaa;margin-top:3px;font-family:'DM Mono',monospace;">
-          ↔ glisser sur la carte · cliquer pour zoomer
-        </div>
       </div>`;
 
     item.addEventListener('mouseenter', () => D.markers[i]?.getElement()?.classList.add('marker-highlight'));
@@ -1800,15 +2112,12 @@ function renderResults(selected, center, N, T, T_sec) {
     list.appendChild(item);
   });
 
-  map.fitBounds([[center.lat,center.lon],...selected.map(p=>[p.lat,p.lon])],{padding:[40,40]});
+  map.fitBounds([[center.lat,center.lon],...selected.map(p=>[p.lat,p.lon])],{padding:[50,50]});
   setStatus(`${selected.length} positions trouvées ✓`,'ok');
 }
 
 document.getElementById('address').addEventListener('keydown', e => { if(e.key==='Enter') run(); });
 
-// ═══════════════════════════════════════════════════════════
-// ALTERNATIVES
-// ═══════════════════════════════════════════════════════════
 function getSectorAlternatives(playerIdx, currentCandidate) {
   const T_sec = D.T * 60;
   const tMinSec = getMinTimeMinutes() * 60;
@@ -1818,7 +2127,6 @@ function getSectorAlternatives(playerIdx, currentCandidate) {
       if (c === currentCandidate) return false;
       const cBrg = c.bearing ?? bearing(D.center, c);
       if (angularDist(cBrg, brg) >= 45) return false;
-      // Mode plafond : alternatives doivent aussi être dans la fenêtre [Tmin, T]
       const ws = c.walk_sec ?? estimateWalkSec(c.dist_geo, getSpeedKmh());
       return ws >= tMinSec && ws <= T_sec;
     })
@@ -1834,28 +2142,26 @@ function buildAlternativesPopup(playerIdx, currentCandidate, color) {
   const MAX_ALTS = 5;
   const alts     = getSectorAlternatives(playerIdx, currentCandidate).slice(0, MAX_ALTS);
   const ptDef    = PLACE_TYPES.find(pt => pt.id === currentCandidate.type);
-  const icon     = ptDef ? ptDef.icon : (currentCandidate.type === 'custom' ? '📍' : '📍');
+  const icon     = iconChip(currentCandidate.type, 16);
   const stars    = '★'.repeat(Math.min(currentCandidate.wait_score,10)) + '☆'.repeat(Math.max(0,10-currentCandidate.wait_score));
   const walkMin  = currentCandidate.walk_min_adj || currentCandidate.walk_min || 0;
   const timeStr  = currentCandidate.walkTimeIsReal
     ? `${walkMin.toFixed(1)} min`
-    : `~${walkMin.toFixed(1)} min <span style="font-size:9px;color:#aaa">(estimé)</span>`;
+    : `~${walkMin.toFixed(1)} min`;
 
   const bonusItems = (currentCandidate.bonuses||[]).map(b =>
-    `<div style="padding:2px 0;border-bottom:1px solid #f0f0f0;font-size:11px;">${b}</div>`).join('');
+    `<div style="padding:2px 0;font-size:11px;color:#3a3f3a;">${b}</div>`).join('');
   const bonusSection = (currentCandidate.bonuses||[]).length ? `
-    <div style="margin-top:6px;padding-top:5px;border-top:1.5px solid #1a6b3c;">
-      <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#7a9e8a;margin-bottom:3px;">Bonus</div>
+    <div style="margin-top:8px;padding-top:7px;border-top:1px solid #d9d2bd;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#6b6f68;margin-bottom:4px;">Bonus</div>
       ${bonusItems}
     </div>` : '';
 
-  const discScore = currentCandidate.discretion_score ?? computeDiscretion(currentCandidate.tags || {});
   const elevHtml  = (currentCandidate.elev_gain > 0)
-    ? `<div style="font-size:10px;color:#c8970a;margin-top:3px;">↗ +${Math.round(currentCandidate.elev_gain)}m (≈+${(currentCandidate.elev_gain/10).toFixed(1)}min)</div>`
+    ? `<div style="font-size:10px;color:#b8862a;margin-top:4px;font-family:'JetBrains Mono',monospace;">↗ +${Math.round(currentCandidate.elev_gain)}m</div>`
     : '';
 
   const svLink = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${currentCandidate.lat},${currentCandidate.lon}`;
-
   const stateKey = `p${playerIdx}`;
   D.popupState[stateKey] = { playerIdx, color, currentCandidate };
 
@@ -1863,68 +2169,61 @@ function buildAlternativesPopup(playerIdx, currentCandidate, color) {
   if (alts.length) {
     const altItems = alts.map(alt => {
       const altDef   = PLACE_TYPES.find(pt => pt.id === alt.type);
-      const altIcon  = altDef ? altDef.icon : '📍';
-      const altStars = '★'.repeat(Math.min(alt.wait_score,10));
+      const altIcon  = iconChip(alt.type, 14);
       const altKey   = `alt_${playerIdx}_${D.geoFiltered.indexOf(alt)}`;
       D.altRegistry[altKey] = alt;
       const timeNote = alt.walkTimeIsReal ? alt.walk_min.toFixed(1) : `~${alt.walk_min.toFixed(1)}`;
       return `<div onclick="previewAlternative(${playerIdx}, '${altKey}', '${stateKey}')"
-        style="padding:6px 8px;border:1px solid #dde8e2;border-radius:3px;cursor:pointer;
-               margin-bottom:4px;background:#fff;transition:background .12s;"
-        onmouseover="this.style.background='#e8f5ee'" onmouseout="this.style.background='#fff'">
-        <div style="font-size:11px;font-weight:600;color:#1a2e24;">${altIcon} ${alt.name}</div>
-        <div style="font-size:10px;color:#7a9e8a;margin-top:1px;">
-          ⏱ ${timeNote} min · ${altStars} ${alt.wait_score}/10
+        style="padding:7px 9px;border:1px solid #d9d2bd;border-radius:4px;cursor:pointer;
+               margin-bottom:5px;background:#fdfbf5;transition:all .12s;"
+        onmouseover="this.style.background='#e3ecde';this.style.borderColor='#0d3d24'"
+        onmouseout="this.style.background='#fdfbf5';this.style.borderColor='#d9d2bd'">
+        <div style="font-size:11.5px;font-weight:500;color:#1a1d1a;display:flex;align-items:center;gap:6px;">${altIcon}<span>${alt.name}</span></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#6b6f68;margin-top:2px;">
+          ⏱ ${timeNote} min · ${alt.wait_score}/10
         </div>
       </div>`;
     }).join('');
     altsHtml = `
-      <div style="margin-top:8px;padding-top:6px;border-top:1.5px solid #dde8e2;">
-        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#7a9e8a;margin-bottom:5px;">
-          Alternatives du secteur
+      <div style="margin-top:10px;padding-top:8px;border-top:1px solid #d9d2bd;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#6b6f68;margin-bottom:6px;">
+          Alternatives
         </div>
         ${altItems}
       </div>`;
   } else {
-    altsHtml = `<div style="margin-top:8px;font-size:10px;color:#aaa;font-style:italic;">
-      Aucune alternative dans ce secteur.</div>`;
+    altsHtml = `<div style="margin-top:10px;font-size:10px;color:#9a9d96;font-style:italic;">
+      Aucune alternative.</div>`;
   }
 
-  return `<div style="min-width:220px;max-height:440px;overflow-y:auto;font-family:'DM Sans',sans-serif;">
-    <div style="font-weight:700;font-size:13px;color:#1a2e24;margin-bottom:3px;">
-      <span style="display:inline-block;width:18px;height:18px;border-radius:3px;background:${color};
-            color:#fff;text-align:center;line-height:18px;font-size:10px;margin-right:4px;">${playerIdx+1}</span>
-      ${currentCandidate.name}
+  return `<div style="min-width:230px;max-height:460px;overflow-y:auto;font-family:'Inter Tight',sans-serif;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:4px;background:${color};
+            color:#fdfbf5;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;">${playerIdx+1}</span>
+      <div style="font-family:'Fraunces',serif;font-weight:600;font-size:14px;color:#1a1d1a;letter-spacing:-.01em;">${currentCandidate.name}</div>
     </div>
-    <div style="color:#7a9e8a;font-size:11px;">${icon} ${currentCandidate.type}</div>
-    <div style="margin-top:5px;font-size:12px;">⏱ <b>${timeStr}</b> à pied</div>
-    <div style="color:#1a6b3c;font-size:11px;margin-top:2px;">${stars} <b>${currentCandidate.wait_score}/10</b></div>
-    <div style="font-size:10px;margin-top:2px;">${discretionBadge(discScore)}</div>
+    <div style="color:#6b6f68;font-size:11px;display:flex;align-items:center;gap:6px;">${icon}<span>${currentCandidate.type}</span></div>
+    <div style="margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:12px;">⏱ <b>${timeStr}</b></div>
+    <div style="color:#0d3d24;font-size:11px;margin-top:3px;">${stars} <b style="font-family:'JetBrains Mono',monospace;">${currentCandidate.wait_score}/10</b></div>
+    <div style="font-size:10px;margin-top:3px;">${discretionBadge(currentCandidate.tags || {})}</div>
     ${elevHtml}
     ${bonusSection}
     <a href="${svLink}" target="_blank"
-       style="display:block;margin-top:8px;padding:5px 8px;background:#e8f5ee;color:#1a6b3c;
-              text-decoration:none;text-align:center;font-size:11px;font-weight:600;border-radius:3px;">
-      👁 Voir sur place (Street View)
+       style="display:block;margin-top:10px;padding:7px 10px;background:#e3ecde;color:#0d3d24;
+              text-decoration:none;text-align:center;font-size:11px;font-weight:600;border-radius:4px;letter-spacing:.02em;">
+      👁 Voir Street View
     </a>
     ${altsHtml}
-    <div style="margin-top:6px;font-size:9px;color:#bbb;font-family:monospace;">
+    <div style="margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:9px;color:#9a9d96;">
       ${currentCandidate.lat.toFixed(5)}, ${currentCandidate.lon.toFixed(5)}
     </div>
   </div>`;
 }
 
-// ═══════════════════════════════════════════════════════════
-// SWAP — avec Valhalla pour le calcul à la volée
-// ═══════════════════════════════════════════════════════════
 async function swapCandidateFull(playerIdx, altKey, stateKey) {
   const newC = D.altRegistry[altKey];
   if (!newC) return;
-
-  // FEATURE 4 : sauvegarde l'état précédent pour undo
   saveLastMove(playerIdx);
-
-  // Calcul Valhalla si pas encore fait
   if (!newC.walkTimeIsReal) {
     const sec = await calculateSingleWalkTime(D.center, newC);
     if (sec != null) {
@@ -1933,10 +2232,8 @@ async function swapCandidateFull(playerIdx, altKey, stateKey) {
       newC.walkTimeIsReal = true;
     }
   }
-
   D.selected[playerIdx] = newC;
   if (D.popupState[stateKey]) D.popupState[stateKey].currentCandidate = newC;
-
   const color    = COLORS[playerIdx % COLORS.length];
   const newPopup = buildAlternativesPopup(playerIdx, newC, color);
   if (D.markers[playerIdx]) {
@@ -1944,27 +2241,22 @@ async function swapCandidateFull(playerIdx, altKey, stateKey) {
     D.markers[playerIdx].setPopupContent(newPopup);
     D.markers[playerIdx].openPopup();
   }
-  // Retrace la route Valhalla pour le nouveau candidat
   if (D.lines[playerIdx]) {
     getWalkRoute(D.center, newC).then(coords => {
       if (D.lines[playerIdx]) D.lines[playerIdx].setLatLngs(coords);
     });
   }
-
   const ptDef    = PLACE_TYPES.find(pt => pt.id === newC.type);
-  const icon     = ptDef ? ptDef.icon : '📍';
+  const icon     = iconChip(newC.type, 16);
   const timeLabel = newC.walkTimeIsReal
     ? `<span class="time-real">⏱ ${newC.walk_min.toFixed(1)} min</span>`
     : `<span class="time-est">⏱ ~${newC.walk_min.toFixed(1)} min</span>`;
   const nameEl = document.getElementById('result-name-'+playerIdx);
   const metaEl = document.getElementById('result-meta-'+playerIdx);
   if (nameEl) nameEl.textContent = newC.name;
-  if (metaEl) metaEl.innerHTML   = `<span>${icon} ${newC.type}</span>${timeLabel}`;
+  if (metaEl) metaEl.innerHTML   = `<span style="display:inline-flex;align-items:center;gap:5px;">${icon}<span>${newC.type}</span></span>${timeLabel}`;
 }
 
-// ═══════════════════════════════════════════════════════════
-// EXPORTS
-// ═══════════════════════════════════════════════════════════
 function downloadBlob(content, filename, mime) {
   const blob = new Blob([content], {type:mime});
   const url  = URL.createObjectURL(blob);
@@ -1975,12 +2267,12 @@ function downloadBlob(content, filename, mime) {
 
 function exportCSV() {
   if (!D.selected.length) return;
-  const header = ['Joueur','Nom','Type','Latitude','Longitude','Temps_marche_min','Score_qualite','Score_discretion','Bonus'];
+  const header = ['Joueur','Nom','Type','Latitude','Longitude','Temps_min','Score','Discretion','Bonus'];
   const rows = D.selected.map((p,i) => [
     i+1, `"${p.name.replace(/"/g,'""')}"`, p.type,
     p.lat.toFixed(6), p.lon.toFixed(6),
     (p.walk_min_adj || p.walk_min).toFixed(1),
-    p.wait_score, p.discretion_score ?? '-',
+    p.wait_score, computeDiscretionDisplay(p.tags || {}).toFixed(1),
     `"${(p.bonuses||[]).join(' | ')}"`
   ]);
   downloadBlob([header,...rows].map(r=>r.join(',')).join('\n'), 'deploiement.csv', 'text/csv;charset=utf-8;');
@@ -1991,7 +2283,7 @@ function exportGPX() {
   const waypoints = D.selected.map((p, i) => `
   <wpt lat="${p.lat}" lon="${p.lon}">
     <name>Joueur ${i+1} — ${p.name}</name>
-    <desc>Type: ${p.type} | Temps: ${(p.walk_min_adj||p.walk_min).toFixed(1)} min | Score: ${p.wait_score}/10 | Discrétion: ${p.discretion_score??'?'}/10</desc>
+    <desc>Type: ${p.type} | Temps: ${(p.walk_min_adj||p.walk_min).toFixed(1)} min | Score: ${p.wait_score}/10</desc>
     <sym>Flag</sym>
   </wpt>`).join('');
   const gpx = `<?xml version="1.0" encoding="UTF-8"?>
@@ -2002,9 +2294,6 @@ function exportGPX() {
   downloadBlob(gpx, 'deploiement.gpx', 'application/gpx+xml');
 }
 
-// ═══════════════════════════════════════════════════════════
-// FEATURE 4 — UNDO du dernier déplacement
-// ═══════════════════════════════════════════════════════════
 function saveLastMove(playerIdx) {
   if (!D.selected[playerIdx] || !D.lines[playerIdx]) return;
   D.lastMove = {
@@ -2020,20 +2309,16 @@ async function undoLastMove() {
   if (!D.lastMove) return;
   const { playerIdx, prevCandidate, prevLineCoords } = D.lastMove;
   D.selected[playerIdx] = prevCandidate;
-
-  // Repositionner le marqueur
   if (D.markers[playerIdx]) {
     D.markers[playerIdx].setLatLng([prevCandidate.lat, prevCandidate.lon]);
     const color = COLORS[playerIdx % COLORS.length];
     D.markers[playerIdx].setPopupContent(buildAlternativesPopup(playerIdx, prevCandidate, color));
   }
-  // Restaurer le tracé
   if (D.lines[playerIdx] && prevLineCoords) {
     D.lines[playerIdx].setLatLngs(prevLineCoords);
   }
-  // Mettre à jour le panneau résultats
   const ptDef = PLACE_TYPES.find(pt => pt.id === prevCandidate.type);
-  const icon  = ptDef ? ptDef.icon : '📍';
+  const icon  = iconChip(prevCandidate.type, 16);
   const walkM = prevCandidate.walk_min_adj || prevCandidate.walk_min || 0;
   const tLab  = prevCandidate.walkTimeIsReal
     ? `<span class="time-real">⏱ ${walkM.toFixed(1)} min</span>`
@@ -2041,33 +2326,31 @@ async function undoLastMove() {
   const nameEl = document.getElementById('result-name-'+playerIdx);
   const metaEl = document.getElementById('result-meta-'+playerIdx);
   if (nameEl) nameEl.textContent = prevCandidate.name;
-  if (metaEl) metaEl.innerHTML   = `<span>${icon} ${prevCandidate.type}</span>${tLab}`;
-
+  if (metaEl) metaEl.innerHTML   = `<span style="display:inline-flex;align-items:center;gap:5px;">${icon}<span>${prevCandidate.type}</span></span>${tLab}`;
   D.lastMove = null;
   const btn = document.getElementById('btnUndo');
   if (btn) btn.disabled = true;
-  setStatus('Dernier déplacement annulé ✓','ok');
+  setStatus('Annulé ✓','ok');
 }
 
-// Bouton flottant undo
 const undoControl = L.control({ position: 'topleft' });
 undoControl.onAdd = function() {
-  const div = L.DomUtil.create('div', 'undo-control');
+  const div = L.DomUtil.create('div', 'undo-control leaflet-bar');
   div.innerHTML = `
     <button id="btnUndo" disabled
-      style="background:#fff;border:1px solid #dde8e2;width:34px;height:34px;
-             border-radius:4px;cursor:pointer;font-size:18px;
-             box-shadow:0 1px 4px rgba(0,0,0,.15);
+      style="background:#fdfbf5;border:1px solid #d9d2bd;width:34px;height:34px;
+             border-radius:5px;cursor:pointer;font-size:18px;
+             box-shadow:0 1px 4px rgba(0,0,0,.12);
              display:flex;align-items:center;justify-content:center;
-             transition:all .15s;color:#1a6b3c;font-weight:700;"
-      title="Annuler le dernier déplacement (Ctrl+Z)">↶</button>`;
+             transition:all .15s;color:#0d3d24;font-weight:600;
+             font-family:'JetBrains Mono',monospace;"
+      title="Annuler (⌘Z)">↶</button>`;
   L.DomEvent.disableClickPropagation(div);
   div.querySelector('#btnUndo').onclick = undoLastMove;
   return div;
 };
 undoControl.addTo(map);
 
-// Raccourci clavier global
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'z' && D.lastMove) {
     e.preventDefault();
@@ -2075,56 +2358,36 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════
-// FEATURE 7 — PRÉVISUALISATION des alternatives
-// ═══════════════════════════════════════════════════════════
 async function previewAlternative(playerIdx, altKey, stateKey) {
   const alt = D.altRegistry[altKey];
   if (!alt) return;
-
-  // Nettoyer toute prévisualisation précédente
   clearPreview();
-
   D.previewState = {
-    playerIdx,
-    candidate: alt,
-    altKey,
-    stateKey,
+    playerIdx, candidate: alt, altKey, stateKey,
     originalCandidate: D.selected[playerIdx],
   };
-
   const color = COLORS[playerIdx % COLORS.length];
-
-  // Ligne fine reliant le point officiel et le point fantôme (visualise le déplacement)
   D.previewLink = L.polyline([
     [D.selected[playerIdx].lat, D.selected[playerIdx].lon],
     [alt.lat, alt.lon]
-  ], { color:'#c8970a', weight:1.5, dashArray:'2 4', opacity:0.6 }).addTo(map);
-
-  // Marqueur fantôme
+  ], { color:'#b8862a', weight:1.5, dashArray:'2 4', opacity:0.6 }).addTo(map);
   D.previewMarker = L.marker([alt.lat, alt.lon], {
     icon: L.divIcon({ className:'',
-      html:`<div style="width:30px;height:30px;border-radius:5px;background:${color};
-            color:#fff;display:flex;align-items:center;justify-content:center;
-            font-family:'DM Sans',sans-serif;font-weight:700;font-size:13px;
-            border:2px dashed #fff;
+      html:`<div style="width:32px;height:32px;border-radius:6px;background:${color};
+            color:#fdfbf5;display:flex;align-items:center;justify-content:center;
+            font-family:'JetBrains Mono',monospace;font-weight:600;font-size:13px;
+            border:2px dashed #fdfbf5;
             box-shadow:0 2px 8px rgba(0,0,0,.3);
-            opacity:0.7;animation:preview-pulse 1.2s ease-in-out infinite alternate;">
+            opacity:0.75;animation:preview-pulse 1.2s ease-in-out infinite alternate;">
             ${playerIdx+1}?</div>`,
-      iconSize:[30,30], iconAnchor:[15,15] })
+      iconSize:[32,32], iconAnchor:[16,16] })
   }).addTo(map);
-
-  // Tracé fantôme : pointillé
   D.previewLine = L.polyline([[D.center.lat, D.center.lon],[alt.lat, alt.lon]], {
-    color, opacity:0.55, weight:3, dashArray:'8 6'
+    color, opacity:0.6, weight:3, dashArray:'8 6'
   }).addTo(map);
-
-  // Charger l'itinéraire Valhalla en arrière-plan
   getWalkRoute(D.center, alt).then(coords => {
     if (D.previewLine) D.previewLine.setLatLngs(coords);
   });
-
-  // Calculer le temps réel si pas déjà fait
   if (!alt.walkTimeIsReal) {
     const sec = await calculateSingleWalkTime(D.center, alt);
     if (sec != null) {
@@ -2133,45 +2396,44 @@ async function previewAlternative(playerIdx, altKey, stateKey) {
       alt.walkTimeIsReal = true;
     }
   }
-
   showPreviewPopup(playerIdx, alt);
 }
 
 function showPreviewPopup(playerIdx, alt) {
   if (!D.previewMarker || !D.previewState) return;
   const ptDef = PLACE_TYPES.find(pt => pt.id === alt.type);
-  const icon  = ptDef ? ptDef.icon : '📍';
+  const icon  = iconChip(alt.type, 16);
   const orig  = D.previewState.originalCandidate;
   const tNew  = alt.walkTimeIsReal ? alt.walk_min.toFixed(1) : `~${alt.walk_min.toFixed(1)}`;
   const tOld  = (orig.walk_min_adj || orig.walk_min).toFixed(1);
 
-  const popupHtml = `<div style="min-width:230px;font-family:'DM Sans',sans-serif;">
-    <div style="background:#fff8e1;border:1px solid #c8970a;color:#8b6f0a;
-                padding:6px 8px;border-radius:3px;font-size:11px;font-weight:600;
-                margin-bottom:8px;text-align:center;letter-spacing:.06em;">
-      👁 PRÉVISUALISATION
+  const popupHtml = `<div style="min-width:240px;font-family:'Inter Tight',sans-serif;">
+    <div style="background:#f0e4c5;border:1px solid #b8862a;color:#7a5a14;
+                padding:7px 10px;border-radius:4px;font-family:'JetBrains Mono',monospace;
+                font-size:10px;font-weight:600;
+                margin-bottom:10px;text-align:center;letter-spacing:.1em;text-transform:uppercase;">
+      👁 Prévisualisation
     </div>
-    <div style="font-weight:700;font-size:13px;color:#1a2e24;">${icon} ${alt.name}</div>
-    <div style="margin-top:5px;font-size:11px;">
-      <div>⏱ <b>${tNew} min</b> à pied <span style="color:#aaa;">(actuel : ${tOld})</span></div>
-      <div style="color:#1a6b3c;">★ ${alt.wait_score}/10</div>
+    <div style="font-family:'Fraunces',serif;font-weight:600;font-size:14px;color:#1a1d1a;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;">${icon}<span>${alt.name}</span></div>
+    <div style="margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:11px;">
+      <div>⏱ <b>${tNew} min</b> <span style="color:#9a9d96;">(actuel : ${tOld})</span></div>
+      <div style="color:#0d3d24;">★ ${alt.wait_score}/10</div>
     </div>
-    <div style="display:flex; gap:5px; margin-top:10px;">
+    <div style="display:flex; gap:6px; margin-top:12px;">
       <button onclick="confirmPreview()"
-        style="flex:1;padding:7px;background:#1a6b3c;color:#fff;border:none;
-               border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;
-               font-family:'DM Sans',sans-serif;">✓ Adopter</button>
+        style="flex:1;padding:9px;background:#0d3d24;color:#fdfbf5;border:none;
+               border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;
+               font-family:'Inter Tight',sans-serif;letter-spacing:.02em;">✓ Adopter</button>
       <button onclick="clearPreview()"
-        style="flex:1;padding:7px;background:#fff;color:#7a9e8a;
-               border:1px solid #dde8e2;border-radius:3px;font-size:11px;
-               cursor:pointer;font-family:'DM Sans',sans-serif;">✗ Annuler</button>
+        style="flex:1;padding:9px;background:#fdfbf5;color:#6b6f68;
+               border:1px solid #d9d2bd;border-radius:4px;font-size:11px;
+               cursor:pointer;font-family:'Inter Tight',sans-serif;">✗ Annuler</button>
     </div>
-    <div style="margin-top:6px;font-size:9px;color:#bbb;text-align:center;">
-      Échap pour annuler
+    <div style="margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:9px;color:#9a9d96;text-align:center;">
+      Esc pour annuler
     </div>
   </div>`;
-
-  D.previewMarker.bindPopup(popupHtml, { maxWidth: 270 }).openPopup();
+  D.previewMarker.bindPopup(popupHtml, { maxWidth: 280 }).openPopup();
 }
 
 function confirmPreview() {
@@ -2188,34 +2450,23 @@ function clearPreview() {
   D.previewState = null;
 }
 
-// Échap pour annuler une prévisualisation
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && D.previewState) {
-    clearPreview();
-  }
+  if (e.key === 'Escape' && D.previewState) clearPreview();
 });
 
-// ═══════════════════════════════════════════════════════════
-// FEATURE 5 — SAUVEGARDE / CHARGEMENT de versions JSON
-// ═══════════════════════════════════════════════════════════
 function exportVersion() {
   if (!D.selected.length || !D.center) {
-    setStatus('Rien à sauvegarder. Lance un déploiement d\'abord.','error');
+    setStatus('Rien à sauvegarder.','error');
     return;
   }
   const defaultLabel = `${(D.center.display || '').split(',')[0]} - ${D.N} joueurs - ${D.T}min`;
   const label = prompt('Nom de cette version :', defaultLabel);
   if (label === null) return;
-
   const data = {
-    version: '1.0',
-    savedAt: new Date().toISOString(),
-    label,
+    version: '1.0', savedAt: new Date().toISOString(), label,
     params: {
       address:   document.getElementById('address').value,
-      center:    D.center,
-      N:         D.N,
-      T:         D.T,
+      center:    D.center, N: D.N, T: D.T,
       speedKmh:  getSpeedKmh(),
       minTime:    getMinTimeMinutes(),
       minSpacing: getMinSpacing(),
@@ -2229,12 +2480,11 @@ function exportVersion() {
       isochroneEnabled: document.getElementById('isochroneToggle').checked,
     },
     selected:    D.selected,
-    geoFiltered: D.geoFiltered,  // permet de garder les alternatives au reload
+    geoFiltered: D.geoFiltered,
   };
   const safeLabel = label.replace(/[^a-z0-9-_]/gi, '_').slice(0, 50);
-  downloadBlob(JSON.stringify(data, null, 2),
-    `deploiement_${safeLabel}.json`, 'application/json');
-  setStatus('Version sauvegardée ✓','ok');
+  downloadBlob(JSON.stringify(data, null, 2), `deploiement_${safeLabel}.json`, 'application/json');
+  setStatus('Sauvegardé ✓','ok');
 }
 
 async function importVersion(event) {
@@ -2243,11 +2493,7 @@ async function importVersion(event) {
   try {
     const text = await file.text();
     const data = JSON.parse(text);
-    if (!data.version || !data.params || !data.selected) {
-      throw new Error('Fichier invalide');
-    }
-
-    // Restaurer paramètres UI
+    if (!data.version || !data.params || !data.selected) throw new Error('Fichier invalide');
     document.getElementById('address').value     = data.params.address || '';
     document.getElementById('nPlayers').value    = data.params.N;
     document.getElementById('nVal').textContent  = data.params.N;
@@ -2255,18 +2501,15 @@ async function importVersion(event) {
     document.getElementById('tVal').textContent  = data.params.T;
     document.getElementById('walkSpeed').value   = data.params.speedKmh;
     document.getElementById('speedVal').textContent = data.params.speedKmh;
-
     if (data.params.minTime != null) {
       document.getElementById('tMinMinutes').value = data.params.minTime;
       document.getElementById('tMinVal').textContent = data.params.minTime;
-      // Ajuster max du slider min selon la cible
       document.getElementById('tMinMinutes').max = Math.max(0, data.params.T - 1);
     }
     if (data.params.minSpacing != null) {
       document.getElementById('minSpacing').value = data.params.minSpacing;
       document.getElementById('minSpacingVal').textContent = data.params.minSpacing;
     }
-    // Le champ tolerance des anciens fichiers est ignoré (mode plafond)
     if (data.params.weights) {
       document.getElementById('wType').value = data.params.weights.type;
       document.getElementById('wTypeVal').textContent = data.params.weights.type;
@@ -2278,14 +2521,10 @@ async function importVersion(event) {
     if (data.params.activeTypes) {
       activeTypes.clear();
       data.params.activeTypes.forEach(id => activeTypes.add(id));
-      if (data.params.customScores) {
-        Object.assign(customScores, data.params.customScores);
-      }
+      if (data.params.customScores) Object.assign(customScores, data.params.customScores);
       buildPlaceGrid();
     }
     document.getElementById('isochroneToggle').checked = !!data.params.isochroneEnabled;
-
-    // Restaurer l'état applicatif
     D.center      = data.params.center;
     D.N           = data.params.N;
     D.T           = data.params.T;
@@ -2293,167 +2532,98 @@ async function importVersion(event) {
     D.geoFiltered = data.geoFiltered || data.selected;
     D.lastMove    = null;
     clearPreview();
-
-    // Rebuild visuel
     clearMap();
     centerMarker = L.marker([D.center.lat, D.center.lon], {
       icon: L.divIcon({ className:'',
-        html:`<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid #1a6b3c;box-shadow:0 0 10px rgba(26,107,60,.4);"></div>`,
-        iconSize:[18,18], iconAnchor:[9,9] })
-    }).addTo(map).bindPopup(`<b>Point central</b><br><small style="color:#7a9e8a;">${D.center.display || ''}</small>`);
-
+        html:`<div style="width:20px;height:20px;border-radius:50%;background:#fdfbf5;border:3px solid #0d3d24;box-shadow:0 0 0 4px rgba(13,61,36,.15);"></div>`,
+        iconSize:[20,20], iconAnchor:[10,10] })
+    }).addTo(map).bindPopup(`<b>Point central</b><br><small style="color:#6b6f68;">${D.center.display || ''}</small>`);
     renderResults(D.selected, D.center, D.N, D.T, D.T*60);
-
-    // Retracer les itinéraires Valhalla
     for (let i = 0; i < D.selected.length; i++) {
       (async (idx) => {
         const coords = await getWalkRoute(D.center, D.selected[idx]);
         if (D.lines[idx]) {
           D.lines[idx].setLatLngs(coords);
-          D.lines[idx].setStyle({ dashArray: null, opacity: 0.4, weight: 2.5,
-            color: COLORS[idx % COLORS.length] });
+          D.lines[idx].setStyle({ dashArray: null, opacity: 0.55, weight: 3, color: COLORS[idx % COLORS.length] });
         }
       })(i);
     }
-
-    // Reset bouton undo
     const btnUndo = document.getElementById('btnUndo');
     if (btnUndo) btnUndo.disabled = true;
-
-    setStatus(`Version "${data.label}" chargée ✓`,'ok');
+    setStatus(`"${data.label}" chargé ✓`,'ok');
   } catch(e) {
     setStatus('Erreur import : ' + e.message,'error');
-    console.error(e);
   }
   event.target.value = '';
 }
 
-// ═══════════════════════════════════════════════════════════
-// EXPORT PNG / PDF
-// ═══════════════════════════════════════════════════════════
-// EXPORT PNG — rendu canvas natif (pas de lib externe)
-// ═══════════════════════════════════════════════════════════
 async function exportMapPNG() {
   if (!D.selected.length || !D.center) {
     showModal('Rien à exporter', 'Lance un déploiement avant d\'exporter la carte.');
     return;
   }
   setStatus('Génération PNG…', 'running');
-
   const W = 900, H = 600;
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
-
-  // ── Fond blanc
-  ctx.fillStyle = '#f4f7f5';
+  ctx.fillStyle = '#f5f1e8';
   ctx.fillRect(0, 0, W, H);
-
-  // ── Calcul des bornes géo → pixels
   const allPts = [D.center, ...D.selected];
   let minLat = Math.min(...allPts.map(p=>p.lat));
   let maxLat = Math.max(...allPts.map(p=>p.lat));
   let minLon = Math.min(...allPts.map(p=>p.lon));
   let maxLon = Math.max(...allPts.map(p=>p.lon));
-
-  // Marge 20%
   const padLat = (maxLat - minLat) * 0.3 || 0.003;
   const padLon = (maxLon - minLon) * 0.3 || 0.004;
   minLat -= padLat; maxLat += padLat;
   minLon -= padLon; maxLon += padLon;
-
-  // Zone de dessin (laisse place légende à droite)
   const mapW = W - 230, mapH = H - 40, mapX = 20, mapY = 20;
-
   function toXY(lat, lon) {
     const x = mapX + (lon - minLon) / (maxLon - minLon) * mapW;
     const y = mapY + (1 - (lat - minLat) / (maxLat - minLat)) * mapH;
     return [x, y];
   }
-
-  // ── Fond carte OSM via Static Maps (tentative, fallback quadrillage)
   await drawMapBackground(ctx, mapX, mapY, mapW, mapH, minLat, maxLat, minLon, maxLon);
-
-  // ── Cercles d'exclusion
-  const spacing = getMinSpacing();
-  if (spacing > 0) {
-    const metersPerPixelLon = (maxLon - minLon) / mapW * 111320 * Math.cos(D.center.lat * Math.PI/180);
-    D.selected.forEach((p, i) => {
-      const [cx, cy] = toXY(p.lat, p.lon);
-      const r = (spacing / metersPerPixelLon);
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.strokeStyle = COLORS[i % COLORS.length] + '55';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.stroke();
-      ctx.fillStyle = COLORS[i % COLORS.length] + '11';
-      ctx.fill();
-      ctx.setLineDash([]);
-    });
-  }
-
-  // ── Lignes centre → points
   const [cxC, cyC] = toXY(D.center.lat, D.center.lon);
   D.selected.forEach((p, i) => {
     const [px, py] = toXY(p.lat, p.lon);
-    ctx.beginPath();
-    ctx.moveTo(cxC, cyC);
-    ctx.lineTo(px, py);
-    ctx.strokeStyle = COLORS[i % COLORS.length] + '66';
+    ctx.beginPath(); ctx.moveTo(cxC, cyC); ctx.lineTo(px, py);
+    ctx.strokeStyle = COLORS[i % COLORS.length] + '88';
     ctx.lineWidth = 1.5;
-    ctx.setLineDash([5, 5]);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
   });
-
-  // ── Points joueurs
   D.selected.forEach((p, i) => {
     const [px, py] = toXY(p.lat, p.lon);
     const col = COLORS[i % COLORS.length];
-    // Ombre
     ctx.shadowColor = 'rgba(0,0,0,0.25)';
     ctx.shadowBlur  = 6;
-    // Carré coloré
     ctx.fillStyle = col;
-    roundRect(ctx, px - 13, py - 13, 26, 26, 5);
+    roundRect(ctx, px - 14, py - 14, 28, 28, 5);
     ctx.fill();
     ctx.shadowBlur = 0;
-    // Numéro
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 11px DM Sans, sans-serif';
+    ctx.fillStyle = '#fdfbf5';
+    ctx.font = 'bold 12px JetBrains Mono, monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(String(i + 1), px, py);
   });
-
-  // ── Point central
   const [cxF, cyF] = toXY(D.center.lat, D.center.lon);
-  ctx.shadowColor = 'rgba(26,107,60,0.4)';
+  ctx.shadowColor = 'rgba(13,61,36,0.4)';
   ctx.shadowBlur  = 10;
   ctx.beginPath();
   ctx.arc(cxF, cyF, 9, 0, Math.PI * 2);
-  ctx.fillStyle = '#fff';
-  ctx.fill();
-  ctx.strokeStyle = '#1a6b3c';
-  ctx.lineWidth = 3;
-  ctx.stroke();
+  ctx.fillStyle = '#fdfbf5'; ctx.fill();
+  ctx.strokeStyle = '#0d3d24'; ctx.lineWidth = 3; ctx.stroke();
   ctx.shadowBlur = 0;
-
-  // ── Légende
   drawLegend(ctx, W - 220, 20, 205, H - 40);
-
-  // ── Titre + date
-  ctx.fillStyle = '#1a2e24';
-  ctx.font = 'bold 11px DM Mono, monospace';
+  ctx.fillStyle = '#1a1d1a';
+  ctx.font = 'bold 11px JetBrains Mono, monospace';
   ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
   ctx.fillText('DÉPLOIEMENT+', mapX, H - 8);
-  ctx.fillStyle = '#7a9e8a';
-  ctx.font = '9px DM Mono, monospace';
+  ctx.fillStyle = '#6b6f68';
+  ctx.font = '9px JetBrains Mono, monospace';
   ctx.fillText(new Date().toLocaleString('fr-FR', {dateStyle:'short', timeStyle:'short'}), mapX + 110, H - 8);
-
-  // ── Téléchargement
   const link = document.createElement('a');
   link.download = `deploiement_${Date.now()}.png`;
   link.href = canvas.toDataURL('image/png');
@@ -2461,34 +2631,24 @@ async function exportMapPNG() {
   setStatus('PNG exporté ✓', 'ok');
 }
 
-// Fond de carte : grille géo légère (pas de dépendance externe)
 async function drawMapBackground(ctx, x, y, w, h, minLat, maxLat, minLon, maxLon) {
-  // Fond clair
-  ctx.fillStyle = '#eef2ef';
+  ctx.fillStyle = '#ede8d9';
   ctx.fillRect(x, y, w, h);
-
-  // Grille de coordonnées
-  ctx.strokeStyle = '#d0ddd5';
+  ctx.strokeStyle = '#d9d2bd';
   ctx.lineWidth = 0.5;
-  const gridN = 5;
-  for (let i = 1; i < gridN; i++) {
-    const gx = x + (w / gridN) * i;
-    const gy = y + (h / gridN) * i;
+  for (let i = 1; i < 5; i++) {
+    const gx = x + (w / 5) * i;
+    const gy = y + (h / 5) * i;
     ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx, y + h); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x + w, gy); ctx.stroke();
   }
-
-  // Essaie de charger une tuile OSM simplifiée via tile serveur public
   try {
     const zoom = getBestZoom(maxLat - minLat, maxLon - minLon);
     const cLat = (minLat + maxLat) / 2, cLon = (minLon + maxLon) / 2;
-    // Utilise l'API staticmap d'OpenStreetMap (pas de clé requise)
     const url = `https://staticmap.openstreetmap.de/staticmap.php?center=${cLat},${cLon}&zoom=${zoom}&size=${w}x${h}&maptype=mapnik`;
     const img = await loadImageCORS(url);
     ctx.drawImage(img, x, y, w, h);
-  } catch(e) {
-    // Fond grille seulement (déjà dessiné)
-  }
+  } catch(e) {}
 }
 
 function getBestZoom(dLat, dLon) {
@@ -2511,64 +2671,42 @@ function loadImageCORS(src) {
 }
 
 function drawLegend(ctx, x, y, w, h) {
-  // Fond
-  ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  roundRect(ctx, x, y, w, h, 6);
-  ctx.fill();
-  ctx.strokeStyle = '#dde8e2';
-  ctx.lineWidth = 1;
-  roundRect(ctx, x, y, w, h, 6);
-  ctx.stroke();
-
+  ctx.fillStyle = 'rgba(253,251,245,0.95)';
+  roundRect(ctx, x, y, w, h, 6); ctx.fill();
+  ctx.strokeStyle = '#d9d2bd'; ctx.lineWidth = 1;
+  roundRect(ctx, x, y, w, h, 6); ctx.stroke();
   const pad = 12;
   let cy = y + pad + 12;
-
-  // Titre
-  ctx.fillStyle = '#1a6b3c';
-  ctx.font = 'bold 10px DM Mono, monospace';
+  ctx.fillStyle = '#0d3d24';
+  ctx.font = 'bold 10px JetBrains Mono, monospace';
   ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
   ctx.fillText('DÉPLOIEMENT+', x + pad, cy);
   cy += 14;
-
-  // Adresse
-  ctx.fillStyle = '#7a9e8a';
-  ctx.font = '9px sans-serif';
+  ctx.fillStyle = '#6b6f68';
+  ctx.font = '9px Inter Tight, sans-serif';
   const addr = (D.center?.display || '').split(',').slice(0,2).join(',').substring(0, 28);
   ctx.fillText(addr, x + pad, cy);
   cy += 12;
-
-  // Fenêtre de temps
-  ctx.fillStyle = '#1a2e24';
-  ctx.font = '9px sans-serif';
+  ctx.fillStyle = '#1a1d1a';
+  ctx.font = '9px Inter Tight, sans-serif';
   ctx.fillText(`${getMinTimeMinutes()}–${D.T} min · ${D.selected.length} pts`, x + pad, cy);
   cy += 16;
-
-  // Séparateur
-  ctx.strokeStyle = '#dde8e2';
-  ctx.lineWidth = 0.5;
+  ctx.strokeStyle = '#d9d2bd'; ctx.lineWidth = 0.5;
   ctx.beginPath();
-  ctx.moveTo(x + pad, cy); ctx.lineTo(x + w - pad, cy);
-  ctx.stroke();
+  ctx.moveTo(x + pad, cy); ctx.lineTo(x + w - pad, cy); ctx.stroke();
   cy += 10;
-
-  // Liste des points
   const lineH = Math.min(18, (h - (cy - y) - pad) / Math.max(1, D.selected.length));
   D.selected.forEach((p, i) => {
     if (cy + lineH > y + h - pad) return;
     const col = COLORS[i % COLORS.length];
-    // Carré couleur
     ctx.fillStyle = col;
-    roundRect(ctx, x + pad, cy - 8, 11, 11, 2);
-    ctx.fill();
-    // Numéro
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 7px sans-serif';
+    roundRect(ctx, x + pad, cy - 8, 11, 11, 2); ctx.fill();
+    ctx.fillStyle = '#fdfbf5';
+    ctx.font = 'bold 7px JetBrains Mono, monospace';
     ctx.textAlign = 'center';
     ctx.fillText(String(i+1), x + pad + 5.5, cy);
-    // Nom + temps
-    ctx.fillStyle = '#1a2e24';
-    ctx.font = '9px sans-serif';
+    ctx.fillStyle = '#1a1d1a';
+    ctx.font = '9px Inter Tight, sans-serif';
     ctx.textAlign = 'left';
     const wm = (p.walk_min_adj || p.walk_min).toFixed(1);
     const label = `${p.name.substring(0, 18)} · ${wm}min`;
@@ -2577,7 +2715,6 @@ function drawLegend(ctx, x, y, w, h) {
   });
 }
 
-// Helper roundRect compatible tous navigateurs
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -2590,15 +2727,6 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.lineTo(x, y + r);
   ctx.quadraticCurveTo(x, y, x + r, y);
   ctx.closePath();
-}
-
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
-    const s = document.createElement('script');
-    s.src = src; s.onload = resolve; s.onerror = reject;
-    document.head.appendChild(s);
-  });
 }
 </script>
 </body>
