@@ -29,19 +29,11 @@
   --rust-soft:    #f0d9cc;
   --camera:       #c0392b;
   --camera-soft:  #fde8e6;
+  --transit:      #2d6fa3;
+  --transit-soft: #d6e5f3;
   --white:        #fdfbf5;
   --shadow:       0 1px 0 rgba(26,29,26,.04), 0 2px 8px rgba(26,29,26,.06);
   --shadow-lg:    0 8px 32px rgba(13,61,36,.12);
-  --green:       var(--forest);
-  --green-mid:   var(--forest-2);
-  --green-light: var(--forest-soft);
-  --border:      var(--paper-line);
-  --text:        var(--ink);
-  --muted:       var(--ink-3);
-  --bg:          var(--paper);
-  --red:         var(--rust);
-  --orange:      var(--ochre);
-  --yellow:      var(--ochre);
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 html, body { height:100%; }
@@ -106,6 +98,49 @@ header h1 em { font-style:italic; color:var(--forest-2); font-weight:500; }
   border-right:1px solid var(--paper-line);
   display:flex; flex-direction:column; overflow:hidden; position:relative;
 }
+
+/* ============ ONGLETS ============ */
+.tab-bar {
+  display:grid; grid-template-columns:1fr 1fr;
+  background:var(--paper);
+  border-bottom:1px solid var(--paper-line);
+  flex-shrink:0;
+}
+.tab-btn {
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  padding:13px 14px;
+  background:transparent; border:none; cursor:pointer;
+  font-family:'Inter Tight', sans-serif; font-size:.78rem; font-weight:500;
+  color:var(--ink-3); letter-spacing:.01em;
+  border-bottom:2px solid transparent;
+  transition:all .15s; position:relative;
+}
+.tab-btn:hover:not(:disabled):not(.active) { color:var(--ink-2); background:var(--paper-2); }
+.tab-btn.active {
+  background:var(--white); color:var(--forest);
+  border-bottom-color:var(--forest);
+  font-weight:600;
+}
+.tab-btn:disabled { opacity:0.4; cursor:not-allowed; }
+.tab-num {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:18px; height:18px; border-radius:50%;
+  background:var(--paper-line); color:var(--ink-3);
+  font-family:'JetBrains Mono', monospace; font-size:.62rem; font-weight:600;
+}
+.tab-btn.active .tab-num { background:var(--forest); color:var(--paper); }
+.tab-stale-badge {
+  position:absolute; top:8px; right:10px;
+  width:7px; height:7px; border-radius:50%;
+  background:var(--ochre);
+  box-shadow:0 0 0 2px var(--white);
+  display:none;
+}
+.tab-btn.stale .tab-stale-badge { display:block; }
+
+.tab-content { display:none; flex:1; flex-direction:column; min-height:0; position:relative; }
+.tab-content.active { display:flex; }
+
 .panel-scroll {
   flex:1; overflow-y:auto; padding-bottom:120px;
   scrollbar-width:thin; scrollbar-color:var(--paper-line) transparent;
@@ -132,7 +167,7 @@ header h1 em { font-style:italic; color:var(--forest-2); font-weight:500; }
   font-size:.7rem; font-weight:500; color:var(--ink-2);
   letter-spacing:.01em; margin-bottom:6px;
 }
-.field input[type="text"] {
+.field input[type="text"], .field input[type="datetime-local"] {
   width:100%; border:1px solid var(--paper-line);
   background:var(--paper); color:var(--ink);
   font-family:'Inter Tight', sans-serif; font-size:.88rem;
@@ -140,7 +175,7 @@ header h1 em { font-style:italic; color:var(--forest-2); font-weight:500; }
   transition:all .15s ease;
   border-radius:5px;
 }
-.field input[type="text"]:focus {
+.field input[type="text"]:focus, .field input[type="datetime-local"]:focus {
   border-color:var(--forest); background:var(--white);
   box-shadow:0 0 0 3px rgba(13,61,36,.08);
 }
@@ -249,8 +284,6 @@ header h1 em { font-style:italic; color:var(--forest-2); font-weight:500; }
 .toggle-slider:before { position:absolute; content:""; height:14px; width:14px; left:3px; bottom:3px; background:var(--white); border-radius:50%; transition:.2s; box-shadow:0 1px 2px rgba(0,0,0,.15); }
 .toggle-switch input:checked + .toggle-slider { background:var(--forest); }
 .toggle-switch input:checked + .toggle-slider:before { transform:translateX(14px); }
-
-/* Camera toggle — rouge */
 .toggle-switch.camera-toggle input:checked + .toggle-slider { background:var(--camera); }
 
 .iso-badge { display:inline-block; font-size:.6rem; font-family:'JetBrains Mono', monospace; padding:3px 7px; border-radius:3px; letter-spacing:.04em; font-weight:500; }
@@ -289,6 +322,31 @@ header h1 em { font-style:italic; color:var(--forest-2); font-weight:500; }
 .btn-run:active:not(:disabled) { transform:translateY(0); }
 .btn-run:disabled { background:var(--paper-line); color:var(--ink-4); cursor:not-allowed; box-shadow:none; }
 .btn-run .arrow { font-family:'JetBrains Mono', monospace; font-size:.95rem; }
+
+.btn-validate {
+  width:100%; margin-top:8px;
+  background:var(--white); color:var(--forest);
+  border:1.5px solid var(--forest);
+  font-family:'Inter Tight', sans-serif;
+  font-weight:600; font-size:.78rem;
+  letter-spacing:.04em; padding:10px 14px;
+  cursor:pointer; transition:all .15s;
+  border-radius:6px;
+  display:flex; align-items:center; justify-content:center; gap:10px;
+}
+.btn-validate:hover:not(:disabled) { background:var(--forest-soft); }
+.btn-validate:disabled { opacity:0.4; cursor:not-allowed; border-color:var(--paper-line); color:var(--ink-4); }
+
+.btn-back {
+  display:inline-flex; align-items:center; gap:6px;
+  font-family:'Inter Tight', sans-serif;
+  font-size:.72rem; font-weight:500;
+  color:var(--ink-3); background:transparent;
+  border:none; cursor:pointer; padding:4px 0;
+  margin-bottom:10px;
+}
+.btn-back:hover { color:var(--forest); }
+
 .status { font-family:'JetBrains Mono', monospace; font-size:.68rem; color:var(--ink-3); margin-top:8px; min-height:16px; display:flex; align-items:center; gap:7px; letter-spacing:.02em; }
 .status.running { color:var(--forest); }
 .status.error   { color:var(--rust); }
@@ -307,7 +365,6 @@ header h1 em { font-style:italic; color:var(--forest-2); font-weight:500; }
 .result-bonus { font-size:.66rem; color:var(--forest-2); margin-top:4px; line-height:1.5; }
 .result-discretion { font-size:.65rem; margin-top:3px; }
 
-/* Camera badge */
 .camera-badge {
   display:inline-flex; align-items:center; gap:4px;
   font-size:.62rem; font-family:'JetBrains Mono', monospace;
@@ -346,17 +403,16 @@ header h1 em { font-style:italic; color:var(--forest-2); font-weight:500; }
 #tooltip-global { position:fixed; z-index:99999; pointer-events:none; background:var(--ink); color:var(--paper); padding:9px 12px; border-radius:5px; font-size:.72rem; font-family:'Inter Tight', sans-serif; font-weight:400; white-space:normal; width:240px; line-height:1.45; letter-spacing:0; text-transform:none; box-shadow:0 4px 16px rgba(0,0,0,.3); display:none; max-width:260px; }
 .about-toggle { cursor:pointer; user-select:none; display:flex; align-items:center; justify-content:space-between; }
 .about-toggle::before { content:""; width:14px; height:1px; background:var(--ink-4); margin-right:8px; }
-#aboutContent { font-size:.74rem; line-height:1.6; color:var(--ink-3); padding-top:6px; }
-#aboutContent p { margin-bottom:10px; }
-#aboutContent b { color:var(--ink); font-weight:600; }
-#aboutContent code { font-family:'JetBrains Mono', monospace; font-size:.7rem; background:var(--paper); padding:1px 5px; border-radius:3px; border:1px solid var(--paper-line); color:var(--ink-2); }
+#aboutContent, #aboutContentDep { font-size:.74rem; line-height:1.6; color:var(--ink-3); padding-top:6px; }
+#aboutContent p, #aboutContentDep p { margin-bottom:10px; }
+#aboutContent b, #aboutContentDep b { color:var(--ink); font-weight:600; }
+#aboutContent code, #aboutContentDep code { font-family:'JetBrains Mono', monospace; font-size:.7rem; background:var(--paper); padding:1px 5px; border-radius:3px; border:1px solid var(--paper-line); color:var(--ink-2); }
 @keyframes preview-pulse { from { opacity:0.55; transform:scale(1); } to { opacity:0.85; transform:scale(1.08); } }
 .undo-control button:not(:disabled):hover { background:var(--forest-soft) !important; border-color:var(--forest) !important; }
 .undo-control button:disabled { opacity:0.4; cursor:not-allowed; }
 #errorModal { display:none; position:fixed; inset:0; z-index:100000; background:rgba(13,61,36,.35); backdrop-filter:blur(4px); align-items:center; justify-content:center; }
 #errorModal > div { background:var(--white); border-radius:10px; padding:28px 30px; max-width:400px; width:90%; box-shadow:var(--shadow-lg); font-family:'Inter Tight', sans-serif; border:1px solid var(--paper-line); }
 
-/* Camera info panel */
 .camera-info-bar {
   padding:9px 22px;
   background:var(--camera-soft);
@@ -368,6 +424,126 @@ header h1 em { font-style:italic; color:var(--forest-2); font-weight:500; }
 }
 .camera-info-bar.visible { display:flex; }
 .camera-info-bar .cam-dot { width:7px; height:7px; border-radius:50%; background:var(--camera); flex-shrink:0; animation:breathe 2s ease-in-out infinite; }
+
+/* ============ DÉPARTS ============ */
+.mode-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.mode-toggle {
+  display:flex; align-items:center; gap:8px;
+  padding:9px 11px;
+  border:1px solid var(--paper-line);
+  background:var(--paper);
+  cursor:pointer; transition:all .12s;
+  user-select:none; border-radius:5px; position:relative;
+  font-size:.74rem; font-weight:500; color:var(--ink-2);
+}
+.mode-toggle:hover { border-color:var(--transit); background:var(--transit-soft); }
+.mode-toggle.active { border-color:var(--transit); background:var(--transit-soft); color:var(--transit); }
+.mode-toggle.active::before {
+  content:""; position:absolute; left:0; top:6px; bottom:6px; width:2px;
+  background:var(--transit); border-radius:0 1px 1px 0;
+}
+.mode-toggle .mt-icon { font-size:1.1rem; line-height:1; }
+.mode-toggle .mt-check { margin-left:auto; width:14px; height:14px; border:1.5px solid var(--paper-line); border-radius:3px; background:var(--white); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:.6rem; transition:all .12s; }
+.mode-toggle.active .mt-check { background:var(--transit); border-color:var(--transit); color:var(--paper); }
+
+.dep-result-item {
+  padding:13px 22px; border-bottom:1px solid var(--paper-line);
+  cursor:pointer; transition:background .12s; position:relative;
+}
+.dep-result-item:hover { background:var(--transit-soft); }
+.dep-result-item.error { background:rgba(192,57,43,.04); }
+.dep-result-item.error:hover { background:rgba(192,57,43,.08); }
+
+.dep-arrow-row {
+  display:flex; align-items:center; gap:10px; margin-bottom:8px;
+}
+.dep-num-from, .dep-num-to {
+  width:26px; height:26px; border-radius:6px;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono', monospace; font-weight:600; font-size:.72rem;
+  color:var(--paper); flex-shrink:0;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.12), 0 1px 2px rgba(0,0,0,.15);
+}
+.dep-num-from { background:var(--transit); }
+.dep-arrow-line {
+  flex:1; height:18px; position:relative;
+  display:flex; align-items:center; justify-content:center;
+}
+.dep-arrow-line::before {
+  content:""; position:absolute; left:0; right:0; top:50%;
+  height:1.5px; background:var(--paper-line);
+  transform:translateY(-50%);
+}
+.dep-arrow-line::after {
+  content:""; position:absolute; right:-3px; top:50%;
+  width:0; height:0;
+  border-left:6px solid var(--paper-line);
+  border-top:4px solid transparent;
+  border-bottom:4px solid transparent;
+  transform:translateY(-50%);
+}
+.dep-arrow-icons {
+  position:relative; z-index:1;
+  background:var(--white); padding:0 6px;
+  font-size:.85rem; line-height:1;
+  display:flex; gap:3px;
+}
+.dep-from-name { font-size:.82rem; font-weight:600; color:var(--ink); letter-spacing:-.01em; }
+.dep-to-name { font-size:.78rem; color:var(--ink-2); margin-top:2px; }
+.dep-to-name::before { content:"→ "; color:var(--ink-4); font-family:'JetBrains Mono', monospace; }
+.dep-meta {
+  font-family:'JetBrains Mono', monospace; font-size:.66rem;
+  color:var(--ink-3); margin-top:5px;
+  display:flex; gap:10px; flex-wrap:wrap; letter-spacing:.02em;
+}
+.dep-meta .tdur { color:var(--transit); font-weight:600; }
+.dep-modes-line {
+  margin-top:5px; font-size:.7rem;
+  display:flex; gap:4px; align-items:center; flex-wrap:wrap;
+}
+.dep-mode-chip {
+  display:inline-flex; align-items:center; gap:3px;
+  padding:2px 6px; border-radius:3px;
+  font-family:'JetBrains Mono', monospace; font-size:.62rem; font-weight:500;
+  background:var(--transit-soft); color:var(--transit);
+  border:1px solid rgba(45,111,163,.2);
+}
+.dep-mode-chip.walk { background:var(--paper); color:var(--ink-3); border-color:var(--paper-line); }
+.dep-error-msg {
+  font-size:.72rem; color:var(--rust); margin-top:6px; font-style:italic;
+}
+
+.equity-bar {
+  margin-top:10px; padding:10px 12px;
+  background:var(--paper); border-radius:5px;
+  border:1px solid var(--paper-line);
+}
+.equity-label {
+  font-family:'JetBrains Mono', monospace; font-size:.62rem;
+  color:var(--ink-3); letter-spacing:.08em; text-transform:uppercase;
+  display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;
+}
+.equity-label b { color:var(--forest); font-size:.85rem; font-weight:600; letter-spacing:0; text-transform:none; font-family:'JetBrains Mono', monospace; }
+.equity-meter {
+  height:6px; border-radius:3px;
+  background:var(--paper-line); position:relative; overflow:hidden;
+}
+.equity-meter-fill {
+  height:100%; border-radius:3px;
+  background:linear-gradient(to right, var(--rust) 0%, var(--ochre) 50%, var(--forest-3) 100%);
+  transition:width .4s ease;
+}
+
+.stale-banner {
+  padding:10px 22px;
+  background:var(--ochre-soft);
+  border-bottom:1px solid rgba(184,134,42,.3);
+  font-family:'JetBrains Mono', monospace;
+  font-size:.66rem; color:#7a5a14;
+  display:flex; align-items:center; gap:8px;
+  letter-spacing:.02em;
+}
+.stale-banner .stale-dot { width:7px; height:7px; border-radius:50%; background:var(--ochre); flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -377,212 +553,383 @@ header h1 em { font-style:italic; color:var(--forest-2); font-weight:500; }
   <h1>Déploiement<em>+</em></h1>
   <div class="header-meta">
     <span class="dot"></span>
-    <span>VALHALLA · OSM</span>
+    <span>VALHALLA · OSM · TRANSITOUS</span>
   </div>
 </header>
 
 <div class="layout">
   <div class="panel">
-    <div class="panel-scroll">
 
-      <!-- Adresse -->
-      <div class="section">
-        <div class="section-title">Point central</div>
-        <div class="address-row">
-          <div class="field">
-            <label>Adresse<span class="help-icon" data-tip="Point de départ commun. Tape une adresse, un lieu, ou utilise la géolocalisation GPS (📍).">ⓘ</span></label>
-            <input type="text" id="address" placeholder="Ex : Place Bellecour, Lyon" />
-          </div>
-          <button class="btn-geolocate" onclick="geolocateMe()" title="Ma position GPS">📍</button>
-        </div>
-      </div>
+    <!-- ==================== ONGLETS ==================== -->
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tabBtnDeploy" onclick="switchTab('deploy')">
+        <span class="tab-num">1</span>
+        <span>Déploiement</span>
+      </button>
+      <button class="tab-btn" id="tabBtnDepartures" onclick="switchTab('departures')" disabled>
+        <span class="tab-num">2</span>
+        <span>Départs</span>
+        <span class="tab-stale-badge"></span>
+      </button>
+    </div>
 
-      <!-- Paramètres -->
-      <div class="section">
-        <div class="section-title">Paramètres</div>
-        <div class="range-row">
-          <div class="field">
-            <label>Joueurs<span class="help-icon" data-tip="Nombre de positions à générer autour du point central.">ⓘ</span></label>
-            <input type="range" id="nPlayers" min="2" max="100" value="5"
-              oninput="document.getElementById('nVal').textContent=this.value">
-            <div class="range-val"><strong id="nVal">5</strong><small>personnes</small></div>
-          </div>
-          <div class="field">
-            <label>Temps max<span class="help-icon" data-tip="Plafond du temps de marche.">ⓘ</span></label>
-            <input type="range" id="tMinutes" min="2" max="30" value="10"
-              oninput="onTargetTimeInput(this.value)">
-            <div class="range-val"><strong id="tVal">10</strong><small>min</small></div>
+    <!-- ==================== ONGLET 1 : DÉPLOIEMENT ==================== -->
+    <div class="tab-content active" id="tabContentDeploy">
+      <div class="panel-scroll">
+
+        <!-- Adresse -->
+        <div class="section">
+          <div class="section-title">Point central</div>
+          <div class="address-row">
+            <div class="field">
+              <label>Adresse<span class="help-icon" data-tip="Point de départ commun. Tape une adresse, un lieu, ou utilise la géolocalisation GPS (📍).">ⓘ</span></label>
+              <input type="text" id="address" placeholder="Ex : Place Bellecour, Lyon" />
+            </div>
+            <button class="btn-geolocate" onclick="geolocateMe()" title="Ma position GPS">📍</button>
           </div>
         </div>
-        <div class="field" style="margin-top:14px;">
-          <label>Temps min<span class="help-icon" data-tip="Plancher du temps de marche.">ⓘ</span></label>
-          <input type="range" id="tMinMinutes" min="0" max="29" step="1" value="0"
-            oninput="onMinTimeInput(this.value)">
-          <div class="range-val"><strong id="tMinVal">0</strong><small>min · 0 = aucun min</small></div>
-        </div>
-        <div class="field" style="margin-top:14px;">
-          <label>Distance min entre joueurs<span class="help-icon" data-tip="Distance minimale à vol d'oiseau entre deux joueurs sélectionnés.">ⓘ</span></label>
-          <input type="range" id="minSpacing" min="0" max="500" step="10" value="0"
-            oninput="document.getElementById('minSpacingVal').textContent=this.value">
-          <div class="range-val"><strong id="minSpacingVal">0</strong><small>m · vol d'oiseau</small></div>
-        </div>
-        <div class="field" style="margin-top:14px;">
-          <label>Vitesse de marche<span class="help-icon" data-tip="Allure moyenne. 3.5 km/h = marche normale, 5 km/h = soutenue, 12 km/h = vélo.">ⓘ</span></label>
-          <div class="speed-presets">
-            <button class="btn-small" onclick="setSpeed(2.5)">🐢 2.5</button>
-            <button class="btn-small active" id="speedPreset35" onclick="setSpeed(3.5)">🚶 3.5</button>
-            <button class="btn-small" onclick="setSpeed(5)">🏃 5.0</button>
-            <button class="btn-small" onclick="setSpeed(12)">🚴 12</button>
+
+        <!-- Paramètres -->
+        <div class="section">
+          <div class="section-title">Paramètres</div>
+          <div class="range-row">
+            <div class="field">
+              <label>Joueurs<span class="help-icon" data-tip="Nombre de positions à générer autour du point central.">ⓘ</span></label>
+              <input type="range" id="nPlayers" min="2" max="100" value="5"
+                oninput="document.getElementById('nVal').textContent=this.value">
+              <div class="range-val"><strong id="nVal">5</strong><small>personnes</small></div>
+            </div>
+            <div class="field">
+              <label>Temps max<span class="help-icon" data-tip="Plafond du temps de marche.">ⓘ</span></label>
+              <input type="range" id="tMinutes" min="2" max="30" value="10"
+                oninput="onTargetTimeInput(this.value)">
+              <div class="range-val"><strong id="tVal">10</strong><small>min</small></div>
+            </div>
           </div>
-          <input type="range" id="walkSpeed" min="2" max="15" step="0.5" value="3.5"
-            oninput="onSpeedInput(this.value)">
-          <div class="range-val"><strong id="speedVal">3.5</strong><small>km/h</small></div>
+          <div class="field" style="margin-top:14px;">
+            <label>Temps min<span class="help-icon" data-tip="Plancher du temps de marche.">ⓘ</span></label>
+            <input type="range" id="tMinMinutes" min="0" max="29" step="1" value="0"
+              oninput="onMinTimeInput(this.value)">
+            <div class="range-val"><strong id="tMinVal">0</strong><small>min · 0 = aucun min</small></div>
+          </div>
+          <div class="field" style="margin-top:14px;">
+            <label>Distance min entre joueurs<span class="help-icon" data-tip="Distance minimale à vol d'oiseau entre deux joueurs sélectionnés.">ⓘ</span></label>
+            <input type="range" id="minSpacing" min="0" max="500" step="10" value="0"
+              oninput="document.getElementById('minSpacingVal').textContent=this.value">
+            <div class="range-val"><strong id="minSpacingVal">0</strong><small>m · vol d'oiseau</small></div>
+          </div>
+          <div class="field" style="margin-top:14px;">
+            <label>Vitesse de marche<span class="help-icon" data-tip="Allure moyenne. 3.5 km/h = marche normale, 5 km/h = soutenue, 12 km/h = vélo.">ⓘ</span></label>
+            <div class="speed-presets">
+              <button class="btn-small" onclick="setSpeed(2.5)">🐢 2.5</button>
+              <button class="btn-small active" id="speedPreset35" onclick="setSpeed(3.5)">🚶 3.5</button>
+              <button class="btn-small" onclick="setSpeed(5)">🏃 5.0</button>
+              <button class="btn-small" onclick="setSpeed(12)">🚴 12</button>
+            </div>
+            <input type="range" id="walkSpeed" min="2" max="15" step="0.5" value="3.5"
+              oninput="onSpeedInput(this.value)">
+            <div class="range-val"><strong id="speedVal">3.5</strong><small>km/h</small></div>
+          </div>
+          <div class="toggle-row">
+            <label>Zone isochrone<span class="help-icon" data-tip="Active le calcul d'une zone réelle accessible en X minutes via Valhalla.">ⓘ</span></label>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <span id="isoBadge" class="iso-badge active">Valhalla</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="isochroneToggle" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
         </div>
-        <div class="toggle-row">
-          <label>Zone isochrone<span class="help-icon" data-tip="Active le calcul d'une zone réelle accessible en X minutes via Valhalla.">ⓘ</span></label>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <span id="isoBadge" class="iso-badge active">Valhalla</span>
-            <label class="toggle-switch">
-              <input type="checkbox" id="isochroneToggle" checked>
+
+        <!-- Caméras -->
+        <div class="section">
+          <div class="section-title">Surveillance · Caméras</div>
+          <div class="toggle-row">
+            <label>📹 Afficher les caméras<span class="help-icon" data-tip="Charge les caméras de surveillance depuis la base de données open-source. Affichées dans l'isochrone et intégrées au score de discrétion.">ⓘ</span></label>
+            <label class="toggle-switch camera-toggle">
+              <input type="checkbox" id="cameraToggle" checked>
               <span class="toggle-slider"></span>
             </label>
           </div>
-        </div>
-      </div>
 
-      <!-- Caméras -->
-      <div class="section">
-        <div class="section-title">Surveillance · Caméras</div>
-        <div class="toggle-row">
-          <label>📹 Afficher les caméras<span class="help-icon" data-tip="Charge les caméras de surveillance depuis la base de données open-source (camerci, parisPoliceArcgis, sousSurveillanceNet…). Affichées dans l'isochrone et intégrées au score de discrétion.">ⓘ</span></label>
-          <label class="toggle-switch camera-toggle">
-            <input type="checkbox" id="cameraToggle" checked>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:10px;">
-          <button class="btn-small" onclick="reloadCameras()" id="btnReloadCams">↻ Recharger</button>
-          <button class="btn-small" onclick="document.getElementById('camFileInput').click()">📂 CSV local</button>
-        </div>
-        <input type="file" id="camFileInput" accept=".csv,.txt" style="display:none;" onchange="loadCamerasFromFile(event)">
-
-        <div class="field" style="margin-top:12px;">
-          <label>URL CSV personnalisée<span class="help-icon" data-tip="URL d'un CSV avec colonnes lat;lon (séparateur ; ou ,). Vide = sources par défaut du repo cameras-csvs.">ⓘ</span></label>
-          <input type="text" id="cameraUrl" placeholder="(vide = sources par défaut)" style="font-family:'JetBrains Mono',monospace;font-size:.7rem;">
-        </div>
-
-        <div class="field" style="margin-top:12px;">
-          <label>Rayon d'impact caméra<span class="help-icon" data-tip="Distance en mètres autour du lieu candidat dans laquelle on compte les caméras pour le malus de discrétion.">ⓘ</span></label>
-          <input type="range" id="cameraRadius" min="20" max="200" step="10" value="60"
-            oninput="document.getElementById('cameraRadiusVal').textContent=this.value">
-          <div class="range-val"><strong id="cameraRadiusVal">60</strong><small>m</small></div>
-        </div>
-        <div class="field" style="margin-top:8px;">
-          <label>Malus max par caméra<span class="help-icon" data-tip="Pénalité sur le score de discrétion par caméra dans le rayon. Ex: 1.5 pt par caméra → 3 caméras = −4.5 pts discrétion.">ⓘ</span></label>
-          <input type="range" id="cameraPenalty" min="0.5" max="5" step="0.5" value="1.5"
-            oninput="document.getElementById('cameraPenaltyVal').textContent=this.value">
-          <div class="range-val"><strong id="cameraPenaltyVal">1.5</strong><small>pts / caméra</small></div>
-        </div>
-        <div id="cameraStatus" style="margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:.65rem; color:var(--ink-4); line-height:1.5;">
-          Base non chargée
-        </div>
-      </div>
-
-      <!-- Pondération -->
-      <div class="section">
-        <div class="section-title">Pondération du score</div>
-        <div class="seg-control" style="margin-bottom:14px;">
-          <button class="btn-small active" id="preset-balanced" onclick="applyPreset('balanced')">⚖ Équilibré</button>
-          <button class="btn-small" id="preset-comfort" onclick="applyPreset('comfort')">🛋 Confort</button>
-          <button class="btn-small" id="preset-discret" onclick="applyPreset('discret')">🫥 Discret</button>
-        </div>
-        <div class="weights-row">
-          <div class="weight-field">
-            <label>Type<span class="help-icon" data-tip="Poids du type de lieu dans le tri.">ⓘ</span></label>
-            <input type="range" id="wType" min="0" max="10" value="5" step="1"
-              oninput="document.getElementById('wTypeVal').textContent=this.value">
-            <div class="wval" id="wTypeVal">5</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:10px;">
+            <button class="btn-small" onclick="reloadCameras()" id="btnReloadCams">↻ Recharger</button>
+            <button class="btn-small" onclick="document.getElementById('camFileInput').click()">📂 CSV local</button>
           </div>
-          <div class="weight-field">
-            <label>Confort<span class="help-icon" data-tip="Poids du confort : abrité, banc, éclairage, surface dure.">ⓘ</span></label>
-            <input type="range" id="wComfort" min="0" max="10" value="3" step="1"
-              oninput="document.getElementById('wComfortVal').textContent=this.value">
-            <div class="wval" id="wComfortVal">3</div>
+          <input type="file" id="camFileInput" accept=".csv,.txt" style="display:none;" onchange="loadCamerasFromFile(event)">
+
+          <div class="field" style="margin-top:12px;">
+            <label>URL CSV personnalisée<span class="help-icon" data-tip="URL d'un CSV avec colonnes lat;lon (séparateur ; ou ,). Vide = sources par défaut du repo cameras-csvs.">ⓘ</span></label>
+            <input type="text" id="cameraUrl" placeholder="(vide = sources par défaut)" style="font-family:'JetBrains Mono',monospace;font-size:.7rem;">
+          </div>
+
+          <div class="field" style="margin-top:12px;">
+            <label>Rayon d'impact caméra<span class="help-icon" data-tip="Distance en mètres autour du lieu candidat dans laquelle on compte les caméras pour le malus de discrétion.">ⓘ</span></label>
+            <input type="range" id="cameraRadius" min="20" max="200" step="10" value="60"
+              oninput="document.getElementById('cameraRadiusVal').textContent=this.value">
+            <div class="range-val"><strong id="cameraRadiusVal">60</strong><small>m</small></div>
+          </div>
+          <div class="field" style="margin-top:8px;">
+            <label>Malus max par caméra<span class="help-icon" data-tip="Pénalité sur le score de discrétion par caméra dans le rayon. Ex: 1.5 pt par caméra → 3 caméras = −4.5 pts discrétion.">ⓘ</span></label>
+            <input type="range" id="cameraPenalty" min="0.5" max="5" step="0.5" value="1.5"
+              oninput="document.getElementById('cameraPenaltyVal').textContent=this.value">
+            <div class="range-val"><strong id="cameraPenaltyVal">1.5</strong><small>pts / caméra</small></div>
+          </div>
+          <div id="cameraStatus" style="margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:.65rem; color:var(--ink-4); line-height:1.5;">
+            Base non chargée
           </div>
         </div>
-        <div class="field" style="margin-top:14px;">
-          <label>Impact discrétion<span class="help-icon" data-tip="Définit combien de points la discrétion (tags OSM + caméras) peut ajouter ou retirer au score final.">ⓘ</span></label>
-          <input type="range" id="wDiscretion" min="0" max="10" step="1" value="3"
-            oninput="onDiscretionSlider(this.value)">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px;font-family:'JetBrains Mono', monospace;">
-            <span style="font-size:.65rem;color:var(--ink-3);">−<strong id="wDiscretionVal" style="color:var(--rust); font-weight:600;">3</strong> exposé</span>
-            <span style="font-size:.65rem;color:var(--ink-3);">+<strong style="color:var(--forest); font-weight:600;" id="wDiscretionValPos">3</strong> discret</span>
+
+        <!-- Pondération -->
+        <div class="section">
+          <div class="section-title">Pondération du score</div>
+          <div class="seg-control" style="margin-bottom:14px;">
+            <button class="btn-small active" id="preset-balanced" onclick="applyPreset('balanced')">⚖ Équilibré</button>
+            <button class="btn-small" id="preset-comfort" onclick="applyPreset('comfort')">🛋 Confort</button>
+            <button class="btn-small" id="preset-discret" onclick="applyPreset('discret')">🫥 Discret</button>
+          </div>
+          <div class="weights-row">
+            <div class="weight-field">
+              <label>Type<span class="help-icon" data-tip="Poids du type de lieu dans le tri.">ⓘ</span></label>
+              <input type="range" id="wType" min="0" max="10" value="5" step="1"
+                oninput="document.getElementById('wTypeVal').textContent=this.value">
+              <div class="wval" id="wTypeVal">5</div>
+            </div>
+            <div class="weight-field">
+              <label>Confort<span class="help-icon" data-tip="Poids du confort : abrité, banc, éclairage, surface dure.">ⓘ</span></label>
+              <input type="range" id="wComfort" min="0" max="10" value="3" step="1"
+                oninput="document.getElementById('wComfortVal').textContent=this.value">
+              <div class="wval" id="wComfortVal">3</div>
+            </div>
+          </div>
+          <div class="field" style="margin-top:14px;">
+            <label>Impact discrétion<span class="help-icon" data-tip="Définit combien de points la discrétion (tags OSM + caméras) peut ajouter ou retirer au score final.">ⓘ</span></label>
+            <input type="range" id="wDiscretion" min="0" max="10" step="1" value="3"
+              oninput="onDiscretionSlider(this.value)">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px;font-family:'JetBrains Mono', monospace;">
+              <span style="font-size:.65rem;color:var(--ink-3);">−<strong id="wDiscretionVal" style="color:var(--rust); font-weight:600;">3</strong> exposé</span>
+              <span style="font-size:.65rem;color:var(--ink-3);">+<strong style="color:var(--forest); font-weight:600;" id="wDiscretionValPos">3</strong> discret</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Types de lieux -->
-      <div class="section">
-        <div class="section-title">Types de lieux</div>
-        <div class="select-all-row">
-          <button class="btn-small" onclick="toggleAll(true)">✓ Tout</button>
-          <button class="btn-small" onclick="toggleAll(false)">⊘ Aucun</button>
-          <button class="btn-small" onclick="resetTypeScores()" title="Remettre les scores par défaut">↺ Scores</button>
+        <!-- Types de lieux -->
+        <div class="section">
+          <div class="section-title">Types de lieux</div>
+          <div class="select-all-row">
+            <button class="btn-small" onclick="toggleAll(true)">✓ Tout</button>
+            <button class="btn-small" onclick="toggleAll(false)">⊘ Aucun</button>
+            <button class="btn-small" onclick="resetTypeScores()" title="Remettre les scores par défaut">↺ Scores</button>
+          </div>
+          <div class="place-grid" id="placeGrid"></div>
         </div>
-        <div class="place-grid" id="placeGrid"></div>
-      </div>
 
-      <!-- Progress -->
-      <div class="progress-stepper" id="progressStepper">
-        <div class="stepper-title">Progression</div>
-        <div id="stepperContent"></div>
-      </div>
-
-      <!-- Stats -->
-      <div class="section" id="statsSection" style="display:none;">
-        <div class="section-title">Statistiques</div>
-        <div id="statsContent"></div>
-      </div>
-
-      <!-- Résultats -->
-      <div id="resultsList">
-        <div class="empty-state">
-          <div class="compass"><div class="compass-needle"></div></div>
-          <h3>Prêt à déployer</h3>
-          <p>Définis un point central, une fenêtre de temps et les types de lieux à rechercher.</p>
-          <div class="keys"><kbd>⌘Z</kbd> annuler · <kbd>Esc</kbd> fermer</div>
+        <!-- Progress -->
+        <div class="progress-stepper" id="progressStepper">
+          <div class="stepper-title">Progression</div>
+          <div id="stepperContent"></div>
         </div>
+
+        <!-- Stats -->
+        <div class="section" id="statsSection" style="display:none;">
+          <div class="section-title">Statistiques</div>
+          <div id="statsContent"></div>
+        </div>
+
+        <!-- Résultats -->
+        <div id="resultsList">
+          <div class="empty-state">
+            <div class="compass"><div class="compass-needle"></div></div>
+            <h3>Prêt à déployer</h3>
+            <p>Définis un point central, une fenêtre de temps et les types de lieux à rechercher.</p>
+            <div class="keys"><kbd>⌘Z</kbd> annuler · <kbd>Esc</kbd> fermer</div>
+          </div>
+        </div>
+
+        <!-- À propos -->
+        <div class="section">
+          <div class="section-title about-toggle" onclick="toggleAbout()">
+            <span style="flex:1;">À propos · Aide</span>
+            <span id="aboutCaret" style="font-family:'JetBrains Mono', monospace;">▾</span>
+          </div>
+          <div id="aboutContent" style="display:none;">
+            <p><b>Comment ça marche</b><br>
+            L'outil place N points autour d'un point central dans la fenêtre de temps choisie. L'algorithme glouton prend le meilleur lieu, exclut un disque autour, et recommence.</p>
+            <p><b>Caméras de surveillance</b><br>
+            Les caméras sont chargées depuis <code>anonymous-cucumber/cameras-csvs</code>. Chaque caméra dans le rayon configuré inflige un malus au score de discrétion.</p>
+            <p><b>Valhalla</b><br>
+            Moteur de routage piéton open-source qui calcule les vrais temps de marche.</p>
+            <p><b>Score composite</b><br>
+            Type de lieu + confort + bonus/malus de discrétion (OSM) + malus caméras.</p>
+          </div>
+        </div>
+
+        <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importVersion(event)">
       </div>
 
-      <!-- À propos -->
-      <div class="section">
-        <div class="section-title about-toggle" onclick="toggleAbout()">
-          <span style="flex:1;">À propos · Aide</span>
-          <span id="aboutCaret" style="font-family:'JetBrains Mono', monospace;">▾</span>
-        </div>
-        <div id="aboutContent" style="display:none;">
-          <p><b>Comment ça marche</b><br>
-          L'outil place N points autour d'un point central dans la fenêtre de temps choisie. L'algorithme glouton prend le meilleur lieu, exclut un disque autour, et recommence.</p>
-          <p><b>Caméras de surveillance</b><br>
-          Les caméras sont chargées depuis <code>anonymous-cucumber/cameras-csvs</code> (camerci, Police de Paris, Sous Surveillance Net…). Chaque caméra dans le rayon configuré inflige un malus au score de discrétion. Les caméras sont affichées en rouge 📹 sur la carte.</p>
-          <p><b>Valhalla</b><br>
-          Moteur de routage piéton open-source qui calcule les vrais temps de marche en suivant les rues, escaliers et passages piétons.</p>
-          <p><b>Score composite</b><br>
-          Type de lieu + confort + bonus/malus de discrétion (OSM) + malus caméras. Lieux couverts, végétation → bonus. Routes larges, places ouvertes, caméras proches → malus.</p>
-        </div>
+      <div class="panel-footer">
+        <button class="btn-run" id="btnRun" onclick="run()">
+          <span class="arrow">▸</span>
+          <span>Déployer</span>
+        </button>
+        <button class="btn-validate" id="btnValidateDeploy" onclick="validateDeployments()" disabled>
+          <span>✓ Valider et passer aux départs</span>
+          <span class="arrow">→</span>
+        </button>
+        <div class="status" id="status"><div class="spinner"></div><span>En attente…</span></div>
       </div>
-
-      <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importVersion(event)">
     </div>
 
-    <div class="panel-footer">
-      <button class="btn-run" id="btnRun" onclick="run()">
-        <span class="arrow">▸</span>
-        <span>Déployer</span>
-      </button>
-      <div class="status" id="status"><div class="spinner"></div><span>En attente…</span></div>
+    <!-- ==================== ONGLET 2 : DÉPARTS ==================== -->
+    <div class="tab-content" id="tabContentDepartures">
+
+      <!-- Bandeau "obsolète" -->
+      <div class="stale-banner" id="staleBanner" style="display:none;">
+        <span class="stale-dot"></span>
+        <span>Les déploiements ont changé — relance le calcul des départs</span>
+      </div>
+
+      <div class="panel-scroll">
+
+        <button class="btn-back" onclick="switchTab('deploy')">← Retour aux déploiements</button>
+
+        <!-- Modes de transport -->
+        <div class="section">
+          <div class="section-title">Modes de transport</div>
+          <div class="mode-grid" id="modeGrid">
+            <!-- Rempli dynamiquement -->
+          </div>
+          <div style="margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:.62rem; color:var(--ink-4); line-height:1.5;">
+            Au moins un mode requis. "Marche seule" = pas de TC, calcul pédestre uniquement.
+          </div>
+        </div>
+
+        <!-- Paramètres temporels -->
+        <div class="section">
+          <div class="section-title">Trajet cible</div>
+
+          <div class="field">
+            <label>Heure de départ souhaitée<span class="help-icon" data-tip="Date/heure utilisée pour interroger les horaires GTFS via Transitous.">ⓘ</span></label>
+            <input type="datetime-local" id="depDateTime">
+          </div>
+
+          <div class="range-row">
+            <div class="field">
+              <label>Durée cible<span class="help-icon" data-tip="Temps de trajet TC visé entre point de départ et point de déploiement.">ⓘ</span></label>
+              <input type="range" id="depTargetMin" min="10" max="90" value="30" step="1"
+                oninput="document.getElementById('depTargetVal').textContent=this.value">
+              <div class="range-val"><strong id="depTargetVal">30</strong><small>min</small></div>
+            </div>
+            <div class="field">
+              <label>Tolérance<span class="help-icon" data-tip="Écart accepté autour de la durée cible. ±5 min = trajets entre cible-5 et cible+5.">ⓘ</span></label>
+              <input type="range" id="depToleranceMin" min="2" max="15" value="5" step="1"
+                oninput="document.getElementById('depToleranceVal').textContent=this.value">
+              <div class="range-val"><strong id="depToleranceVal">5</strong><small>± min</small></div>
+            </div>
+          </div>
+
+          <div class="field" style="margin-top:14px;">
+            <label>Marche max aux extrémités<span class="help-icon" data-tip="Distance pédestre acceptable entre point de départ candidat et la station, et entre la station d'arrivée et le point de déploiement.">ⓘ</span></label>
+            <input type="range" id="depMaxWalk" min="100" max="1500" value="800" step="50"
+              oninput="document.getElementById('depMaxWalkVal').textContent=this.value">
+            <div class="range-val"><strong id="depMaxWalkVal">800</strong><small>m</small></div>
+          </div>
+        </div>
+
+        <!-- Stratégie d'optimisation -->
+        <div class="section">
+          <div class="section-title">Stratégie d'optimisation</div>
+          <div class="seg-control">
+            <button class="btn-small active" id="depStrat-stddev" onclick="setDepStrategy('min_stddev')">⚖ Écart minimal</button>
+            <button class="btn-small" id="depStrat-equal" onclick="setDepStrategy('equal_time')">⏱ Temps égal</button>
+            <button class="btn-small" id="depStrat-spread" onclick="setDepStrategy('spread')">🎯 Couverture</button>
+          </div>
+          <div style="margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:.62rem; color:var(--ink-4); line-height:1.6;" id="depStratHint">
+            Minimise l'écart-type des temps de trajet — tout le monde arrive en même temps.
+          </div>
+        </div>
+
+        <!-- Contraintes -->
+        <div class="section">
+          <div class="section-title">Contraintes</div>
+
+          <div class="field">
+            <label>Distance min entre départs<span class="help-icon" data-tip="Distance min à vol d'oiseau entre deux points de départ. 0 = aucune contrainte.">ⓘ</span></label>
+            <input type="range" id="depMinSpacing" min="0" max="2000" value="0" step="50"
+              oninput="document.getElementById('depMinSpacingVal').textContent=this.value">
+            <div class="range-val"><strong id="depMinSpacingVal">0</strong><small>m</small></div>
+          </div>
+
+          <div class="range-row" style="margin-top:14px;">
+            <div class="field">
+              <label>Max départs / station<span class="help-icon" data-tip="Nombre max de joueurs partant de la même station.">ⓘ</span></label>
+              <input type="range" id="depMaxPerStation" min="1" max="5" value="1" step="1"
+                oninput="document.getElementById('depMaxPerStationVal').textContent=this.value">
+              <div class="range-val"><strong id="depMaxPerStationVal">1</strong><small>par station</small></div>
+            </div>
+            <div class="field">
+              <label>Max correspondances<span class="help-icon" data-tip="Nombre max de changements de ligne par trajet.">ⓘ</span></label>
+              <input type="range" id="depMaxTransfers" min="0" max="3" value="1" step="1"
+                oninput="document.getElementById('depMaxTransfersVal').textContent=this.value">
+              <div class="range-val"><strong id="depMaxTransfersVal">1</strong><small>max</small></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Progress -->
+        <div class="progress-stepper" id="depProgressStepper">
+          <div class="stepper-title">Progression</div>
+          <div id="depStepperContent"></div>
+        </div>
+
+        <!-- Stats globales (apparaît après calcul) -->
+        <div class="section" id="depStatsSection" style="display:none;">
+          <div class="section-title">Bilan</div>
+          <div id="depStatsContent"></div>
+        </div>
+
+        <!-- Résultats -->
+        <div id="depResultsList">
+          <div class="empty-state">
+            <div class="compass"><div class="compass-needle"></div></div>
+            <h3>Configurer les départs</h3>
+            <p>Choisis les modes de transport, la durée cible et lance le calcul.</p>
+          </div>
+        </div>
+
+        <!-- À propos départs -->
+        <div class="section">
+          <div class="section-title about-toggle" onclick="toggleAboutDep()">
+            <span style="flex:1;">À propos · Départs</span>
+            <span id="aboutCaretDep" style="font-family:'JetBrains Mono', monospace;">▾</span>
+          </div>
+          <div id="aboutContentDep" style="display:none;">
+            <p><b>Source des données TC</b><br>
+            <code>api.transitous.org</code> — instance OpenTripPlanner publique (couverture mondiale via GTFS agrégés).</p>
+            <p><b>Optimisation</b><br>
+            Algorithme hongrois sur matrice de coûts (N×N). Coût = (durée − cible)² + λ·écart à la moyenne. Itération sur 3 passes pour stabiliser la moyenne.</p>
+            <p><b>Stratégies</b><br>
+            <code>écart minimal</code> : minimise σ.<br>
+            <code>temps égal</code> : durée = cible exacte.<br>
+            <code>couverture</code> : maximise la dispersion géographique.</p>
+            <p><b>Fallback</b><br>
+            Si Transitous est indisponible, l'app charge les stations via Overpass et estime les durées avec des vitesses moyennes par mode (badge "estimation").</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="panel-footer">
+        <button class="btn-run" id="btnRunDepartures" onclick="runDepartures()" style="background:var(--transit);">
+          <span class="arrow">▸</span>
+          <span>Calculer les départs</span>
+        </button>
+        <div class="status" id="depStatus"><div class="spinner"></div><span>Configure les paramètres puis lance le calcul.</span></div>
+      </div>
+
     </div>
+
   </div>
 
   <div id="map"></div>
@@ -590,7 +937,6 @@ header h1 em { font-style:italic; color:var(--forest-2); font-weight:500; }
 
 <div id="tooltip-global"></div>
 
-<!-- Panneau de logs (utile sur mobile/Tor où pas de DevTools) -->
 <button id="logToggle" onclick="toggleLogPanel()" title="Logs"
   style="position:fixed; bottom:14px; right:14px; z-index:99998;
          width:54px; height:54px; border-radius:50%;
@@ -646,7 +992,7 @@ header h1 em { font-style:italic; color:var(--forest-2); font-weight:500; }
 
 <script>
 // ═══════════════════════════════════════════════════════════
-// LOGS UI (utile sur mobile/Tor sans DevTools)
+// LOGS UI
 // ═══════════════════════════════════════════════════════════
 window._logBuffer = [];
 window._logUnseenCount = 0;
@@ -666,7 +1012,6 @@ function uiLog(msg, level = 'info') {
   line.innerHTML = `<span style="color:#6b6f68;">${ts}</span> ${msg.replace(/</g,'&lt;')}`;
   panel.appendChild(line);
   panel.scrollTop = panel.scrollHeight;
-  // Badge
   const isOpen = document.getElementById('logPanel')?.style.display === 'flex';
   if (!isOpen) {
     window._logUnseenCount++;
@@ -688,16 +1033,12 @@ function toggleLogPanel() {
     if (badge) badge.style.display = 'none';
   }
 }
-function clearLogs() {
-  window._logBuffer = [];
-  document.getElementById('logContent').innerHTML = '';
-}
+function clearLogs() { window._logBuffer = []; document.getElementById('logContent').innerHTML = ''; }
 function copyLogs() {
   const txt = window._logBuffer.join('\n');
   navigator.clipboard?.writeText(txt).then(
     () => uiLog('✓ Logs copiés', 'ok'),
     () => {
-      // Fallback : ouvre dans textarea
       const ta = document.createElement('textarea');
       ta.value = txt; document.body.appendChild(ta);
       ta.select(); document.execCommand('copy');
@@ -706,7 +1047,6 @@ function copyLogs() {
     }
   );
 }
-// Capture aussi les erreurs JS globales
 window.addEventListener('error', e => uiLog(`JS ERROR: ${e.message} @${e.filename}:${e.lineno}`, 'error'));
 window.addEventListener('unhandledrejection', e => uiLog(`PROMISE REJECTION: ${e.reason}`, 'error'));
 
@@ -730,28 +1070,49 @@ window.D = {
   previewLine:   null,
   previewLink:   null,
   previewState:  null,
-  cameras:       [],          // [{lat, lon}]
+  cameras:       [],
   cameraLayer:   null,
   cache: {
     overpass: new Map(),
     osrm:     new Map(),
-  }
+    transit:  new Map(),
+  },
+
+  // ============ ONGLETS ============
+  tabs: { current: 'deploy', deploymentValidated: false },
+
+  // ============ DÉPARTS ============
+  departures: {
+    config: {
+      modes: ['subway','tram','bus','rail'],
+      targetMinutes: 30,
+      toleranceMinutes: 5,
+      maxWalkM: 800,
+      strategy: 'min_stddev',
+      minSpacingM: 0,
+      maxPerStation: 1,
+      maxTransfers: 1,
+      walkOnly: false,
+    },
+    candidatesPerPoint: [],
+    assigned: [],
+    itineraryLayer: null,
+    startMarkers: [],
+    transitStations: [],
+    lastConfig: null,
+    isStale: false,
+  },
 };
 
 // ═══════════════════════════════════════════════════════════
-// CAMERAS — chargement CSV (séparateur ; — dumps anonymous-cucumber)
+// CAMERAS — chargement CSV
 // ═══════════════════════════════════════════════════════════
-
-// Sources candidates : dumps agrégés horodatés (toutes sources fusionnées : camerci,
-// parisPoliceArcgis, sousSurveillanceNet, surveillanceUnderSurveillance, allOverpassOsm,
-// umapAngers, umapChambery). On tente du plus récent au plus ancien.
 const CAMERA_DEFAULT_SOURCES = [
   'https://raw.githubusercontent.com/anonymous-cucumber/cameras-csvs/master/dumps/dump_2026-03-29T18%3A03%3A08.579Z.csv',
   'https://raw.githubusercontent.com/anonymous-cucumber/cameras-csvs/master/dumps/dump_2026-02-19T13%3A37%3A31.801Z.csv',
   'https://raw.githubusercontent.com/anonymous-cucumber/cameras-csvs/master/dumps/dump_2026-01-18T16%3A20%3A17.749Z.csv',
 ];
 
-// Auto-détection séparateur (le format dump utilise `;`, mais on garde un fallback)
 function detectSeparator(headerLine) {
   const candidates = [';', '\t', ',', '|'];
   let best = ';', bestCount = 0;
@@ -762,7 +1123,6 @@ function detectSeparator(headerLine) {
   return best;
 }
 
-// Split robuste avec gestion guillemets, séparateur paramétrable
 function splitCSVLine(line, sep) {
   const result = [];
   let cur = '', inQ = false;
@@ -779,33 +1139,24 @@ function splitCSVLine(line, sep) {
 }
 
 function parseCSVCameras(text, sourceLabel = 'CSV') {
-  if (!text || text.length < 10) {
-    uiLog(`[${sourceLabel}] vide`, 'warn');
-    return [];
-  }
-  // Retire BOM
+  if (!text || text.length < 10) { uiLog(`[${sourceLabel}] vide`, 'warn'); return []; }
   if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
 
   const lines = text.split(/\r?\n/);
   if (!lines.length) return [];
 
-  // Force le séparateur ; en premier (format dump anonymous-cucumber confirmé)
   let sep = ';';
   let headers = splitCSVLine(lines[0], sep).map(h => h.toLowerCase().trim());
 
-  // Si on n'a qu'une seule "colonne", autodétection
   if (headers.length < 3) {
     sep = detectSeparator(lines[0]);
     headers = splitCSVLine(lines[0], sep).map(h => h.toLowerCase().trim());
   }
 
-  // Colonnes lat/lon racine (pas infos.X.lat)
   const latIdx = headers.findIndex(h => /^(lat|latitude|y)$/.test(h));
   const lonIdx = headers.findIndex(h => /^(lon|lng|long|longitude|x)$/.test(h));
   const sourceIdx = headers.findIndex(h => h === 'source');
 
-  // Colonnes lat/lon par source (fallback si la racine est vide)
-  // Ex: infos.parisPoliceArcgis.lat, infos.camerci.lat, etc.
   const subLatIdxs = [];
   const subLonIdxs = [];
   headers.forEach((h, i) => {
@@ -817,12 +1168,11 @@ function parseCSVCameras(text, sourceLabel = 'CSV') {
 
   if (latIdx === -1 || lonIdx === -1) {
     uiLog(`[${sourceLabel}] Colonnes lat/lon racine introuvables`, 'warn');
-    uiLog(`Headers (10 prem.): ${headers.slice(0, 10).join(' | ')}`, 'warn');
     return [];
   }
 
   const cameras = [];
-  let skipped = 0, fallbackUsed = 0, emptyRoot = 0;
+  let skipped = 0, fallbackUsed = 0;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
@@ -834,9 +1184,7 @@ function parseCSVCameras(text, sourceLabel = 'CSV') {
     let lat = parseFloat(latStr);
     let lon = parseFloat(lonStr);
 
-    // Fallback sur colonnes par source si racine vide/invalide
     if (isNaN(lat) || isNaN(lon)) {
-      emptyRoot++;
       for (let k = 0; k < subLatIdxs.length; k++) {
         const subLat = parseFloat((cols[subLatIdxs[k]] || '').replace(',', '.'));
         const subLon = parseFloat((cols[subLonIdxs[k]] || '').replace(',', '.'));
@@ -854,7 +1202,7 @@ function parseCSVCameras(text, sourceLabel = 'CSV') {
     cameras.push(cam);
   }
 
-  uiLog(`[${sourceLabel}] ✓ ${cameras.length} caméras${fallbackUsed > 0 ? ` (${fallbackUsed} via fallback infos.X)` : ''} · ${skipped} rejetées · ${emptyRoot} racines vides sur ${lines.length-1} lignes`, cameras.length > 0 ? 'ok' : 'warn');
+  uiLog(`[${sourceLabel}] ✓ ${cameras.length} caméras${fallbackUsed > 0 ? ` (${fallbackUsed} via fallback)` : ''} · ${skipped} rejetées`, cameras.length > 0 ? 'ok' : 'warn');
   return cameras;
 }
 
@@ -872,17 +1220,14 @@ async function fetchCSVText(url, label) {
 }
 
 async function loadCameras() {
-  uiLog(`▶ loadCameras() appelée`);
+  uiLog(`▶ loadCameras()`);
   const toggle   = document.getElementById('cameraToggle');
   const statusEl = document.getElementById('cameraStatus');
-
-  if (!toggle) { uiLog(`⚠ Toggle DOM introuvable`, 'error'); return; }
-  if (!statusEl) { uiLog(`⚠ statusEl DOM introuvable`, 'error'); return; }
+  if (!toggle || !statusEl) return;
 
   if (!toggle.checked) {
     statusEl.innerHTML = '<span style="color:var(--ink-4);">Caméras désactivées</span>';
     D.cameras = [];
-    uiLog(`Toggle désactivé, abandon`);
     return;
   }
 
@@ -895,12 +1240,9 @@ async function loadCameras() {
   let successUrl = null;
   let lastError  = null;
 
-  uiLog(`▶ ${sources.length} source(s) à essayer`);
-
   for (const url of sources) {
     const label = decodeURIComponent(url.split('/').pop()).substring(0, 40);
     statusEl.innerHTML = `<span style="color:var(--forest);">⟳ ${label}…</span>`;
-    uiLog(`  fetch: ${url.substring(0, 80)}…`);
     const text = await fetchCSVText(url, label);
     if (!text) { lastError = `Échec fetch ${label}`; continue; }
     const cams = parseCSVCameras(text, label);
@@ -913,8 +1255,8 @@ async function loadCameras() {
     statusEl.innerHTML = `<span style="color:var(--forest);">✓ ${D.cameras.length.toLocaleString('fr')} caméras</span><br><span style="font-size:.6rem;color:var(--ink-4);">${fname}</span>`;
     uiLog(`✓ ${D.cameras.length} caméras chargées`, 'ok');
   } else {
-    statusEl.innerHTML = `<span style="color:var(--rust);">⚠ ${lastError || 'aucune source'}</span><br><span style="font-size:.6rem;color:var(--ink-4);">→ "📂 CSV local" ou clique 🪲</span>`;
-    uiLog(`⚠ Aucune caméra chargée: ${lastError}`, 'warn');
+    statusEl.innerHTML = `<span style="color:var(--rust);">⚠ ${lastError || 'aucune source'}</span><br><span style="font-size:.6rem;color:var(--ink-4);">→ "📂 CSV local"</span>`;
+    uiLog(`⚠ Aucune caméra: ${lastError}`, 'warn');
   }
   return D.cameras;
 }
@@ -929,7 +1271,6 @@ async function loadCamerasFromFile(event) {
   if (!file) return;
   const statusEl = document.getElementById('cameraStatus');
   statusEl.innerHTML = '<span style="color:var(--forest);">⟳ Lecture fichier…</span>';
-  uiLog(`▶ Lecture fichier local: ${file.name} (${(file.size/1024).toFixed(1)} KB)`);
   try {
     const text = await file.text();
     const cams = parseCSVCameras(text, file.name);
@@ -939,11 +1280,10 @@ async function loadCamerasFromFile(event) {
       uiLog(`✓ ${cams.length} caméras chargées depuis fichier`, 'ok');
       if (D.center) renderCameraLayer(D.center, D.isochronePoly);
     } else {
-      statusEl.innerHTML = `<span style="color:var(--rust);">⚠ 0 lignes valides</span><br><span style="font-size:.6rem;color:var(--ink-4);">Clique 🪲 pour voir les logs</span>`;
+      statusEl.innerHTML = `<span style="color:var(--rust);">⚠ 0 lignes valides</span>`;
     }
   } catch(e) {
     statusEl.innerHTML = `<span style="color:var(--rust);">⚠ ${e.message}</span>`;
-    uiLog(`⚠ Erreur lecture: ${e.message}`, 'warn');
   }
   event.target.value = '';
 }
@@ -956,23 +1296,16 @@ function getCamerasInBbox(minLat, maxLat, minLon, maxLon) {
 }
 
 function countCamerasNear(lat, lon, radiusM) {
-  // Bounding box préfiltrage rapide
   const dLat = radiusM / 111320;
   const dLon = radiusM / (111320 * Math.cos(lat * Math.PI / 180));
   const nearby = D.cameras.filter(c =>
     Math.abs(c.lat - lat) < dLat && Math.abs(c.lon - lon) < dLon
   );
-  // Haversine précis
   return nearby.filter(c => haversine({lat, lon}, c) <= radiusM).length;
 }
 
-function getCameraRadius() {
-  return parseInt(document.getElementById('cameraRadius').value) || 60;
-}
-
-function getCameraPenaltyPerCam() {
-  return parseFloat(document.getElementById('cameraPenalty').value) || 1.5;
-}
+function getCameraRadius() { return parseInt(document.getElementById('cameraRadius').value) || 60; }
+function getCameraPenaltyPerCam() { return parseFloat(document.getElementById('cameraPenalty').value) || 1.5; }
 
 function computeCameraDiscretionPenalty(lat, lon) {
   if (!D.cameras.length) return 0;
@@ -984,11 +1317,9 @@ function computeCameraDiscretionPenalty(lat, lon) {
 }
 
 function renderCameraLayer(center, isoGeom) {
-  // Supprimer ancien layer
   if (D.cameraLayer) { map.removeLayer(D.cameraLayer); D.cameraLayer = null; }
   if (!document.getElementById('cameraToggle').checked || !D.cameras.length) return;
 
-  // Filtrer dans la bbox élargie autour de center (T_sec * speed * 2)
   const speedMs = getSpeedKmh() * 1000 / 3600;
   const T_sec   = parseInt(document.getElementById('tMinutes').value) * 60;
   const rBbox   = T_sec * speedMs * 2.2;
@@ -1000,25 +1331,17 @@ function renderCameraLayer(center, isoGeom) {
     center.lon - dLon, center.lon + dLon
   );
 
-  // Filtrer dans l'isochrone si dispo
   const visible = isoGeom
     ? inBbox.filter(c => isInIsochrone(isoGeom, c.lat, c.lon))
     : inBbox;
 
   if (!visible.length) return;
 
-  // Layer groupé (performance)
   const group = L.layerGroup();
   visible.forEach(cam => {
     const icon = L.divIcon({
       className: '',
-      html: `<div style="
-        width:10px; height:10px; border-radius:50%;
-        background:#c0392b;
-        border:1.5px solid rgba(255,255,255,.7);
-        box-shadow:0 0 4px rgba(192,57,43,.6);
-        cursor:default;
-      "></div>`,
+      html: `<div style="width:10px;height:10px;border-radius:50%;background:#c0392b;border:1.5px solid rgba(255,255,255,.7);box-shadow:0 0 4px rgba(192,57,43,.6);"></div>`,
       iconSize: [10, 10], iconAnchor: [5, 5]
     });
     const tip = cam.source ? `📹 ${cam.source}` : '📹 Caméra';
@@ -1026,14 +1349,13 @@ function renderCameraLayer(center, isoGeom) {
       .bindTooltip(tip, { permanent: false, direction: 'top', className: '' })
       .addTo(group);
   });
-  console.log(`[cams] ${visible.length} caméras affichées (sur ${D.cameras.length} total)`);
 
   D.cameraLayer = group;
   group.addTo(map);
 }
 
 // ═══════════════════════════════════════════════════════════
-// CONSTANTES / CONFIG VALHALLA
+// VALHALLA / CONFIG
 // ═══════════════════════════════════════════════════════════
 const VALHALLA_BASE = 'https://valhalla1.openstreetmap.de';
 
@@ -1073,7 +1395,6 @@ const PLACE_TYPES = [
   { id:"marketplace",    label:"Marché",         icon:ICON.marketplace,    score:6, group:"commerce",query:(b)=>`node["amenity"="marketplace"](${b});`, matchTags:t=>t.amenity==='marketplace' },
 ];
 
-const GROUP_COLOR = { vert:'var(--forest)', urban:'var(--ink-2)', transit:'var(--ochre)', commerce:'var(--rust)' };
 function iconChip(typeId, size=16) {
   const pt = PLACE_TYPES.find(p=>p.id===typeId);
   if (!pt) return `<span style="display:inline-block;width:${size}px;text-align:center;">·</span>`;
@@ -1139,6 +1460,7 @@ function onTargetTimeInput(val) {
 }
 function onMinTimeInput(val) { document.getElementById('tMinVal').textContent=val; }
 function toggleAbout() { const c=document.getElementById('aboutContent'); const caret=document.getElementById('aboutCaret'); const open=c.style.display==='none'; c.style.display=open?'block':'none'; if(caret) caret.textContent=open?'▴':'▾'; }
+function toggleAboutDep() { const c=document.getElementById('aboutContentDep'); const caret=document.getElementById('aboutCaretDep'); const open=c.style.display==='none'; c.style.display=open?'block':'none'; if(caret) caret.textContent=open?'▴':'▾'; }
 
 const URBAN_DETOUR_FACTOR = 1.35;
 function estimateWalkSec(distGeo, speedKmh) { const speedMs=speedKmh*1000/3600; return (distGeo*URBAN_DETOUR_FACTOR)/speedMs; }
@@ -1192,7 +1514,6 @@ function computeScore(candidate) {
   const typeScore=rawType/10;
   const comfortScore=computeComfort(candidate.tags||{})/10;
   const base=(weights.type*typeScore+weights.comfort*comfortScore)*10;
-  // Pénalité caméra
   const camPenalty=computeCameraDiscretionPenalty(candidate.lat, candidate.lon);
   const discretionBonus=computeDiscretionBonus(candidate.tags||{}, maxPts, camPenalty);
   return Math.round(base+discretionBonus);
@@ -1280,6 +1601,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape') closeModal();});
 })();
 
 function setStatus(msg,type=''){const el=document.getElementById('status');el.className='status '+type;el.innerHTML=`<div class="spinner"></div><span>${msg}</span>`;}
+function setDepStatus(msg,type=''){const el=document.getElementById('depStatus');if(!el)return;el.className='status '+type;el.innerHTML=`<div class="spinner"></div><span>${msg}</span>`;}
 
 function haversine(a,b){const R=6371000,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180;const x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
 function bearing(o,p){const la1=o.lat*Math.PI/180,la2=p.lat*Math.PI/180,dLon=(p.lon-o.lon)*Math.PI/180;return(Math.atan2(Math.sin(dLon)*Math.cos(la2),Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dLon))*180/Math.PI+360)%360;}
@@ -1342,382 +1664,1720 @@ function angularDist(a,b){const diff=Math.abs(a-b)%360;return diff>180?360-diff:
 async function enrichAllWalkTimes(center,candidates){const BATCH_SIZE=80;for(let i=0;i<candidates.length;i+=BATCH_SIZE){const batch=candidates.slice(i,i+BATCH_SIZE);try{const times=await getWalkTimes(center,batch);batch.forEach((c,j)=>{if(times[j]!=null&&times[j]<9999){c.walk_sec=times[j];c.walk_min=c.walk_sec/60;c.walkTimeIsReal=true;}});}catch(e){}}}
 
 // ═══════════════════════════════════════════════════════════
-// RUN
+// RUN — DÉPLOIEMENT (onglet 1)
 // ═══════════════════════════════════════════════════════════
 async function run() {
-  const address  = document.getElementById('address').value.trim();
-  const N        = parseInt(document.getElementById('nPlayers').value);
-  const T        = parseInt(document.getElementById('tMinutes').value);
-  const tMin     = getMinTimeMinutes();
-  const speedKmh = getSpeedKmh();
-  const K        = 8;
+  const btnRun=document.getElementById('btnRun');
+  btnRun.disabled=true;
+  document.getElementById('btnValidateDeploy').disabled=true;
+  document.getElementById('resultsList').innerHTML='';
+  document.getElementById('statsSection').style.display='none';
+  showStepper();
+  closeModal();
 
-  if(!address){showModal('Adresse manquante','Saisis une adresse ou utilise la géolocalisation GPS (📍) avant de déployer.');return;}
-  if(activeTypes.size===0){showModal('Aucun type de lieu sélectionné','Coche au moins un type de lieu.');return;}
-  if(tMin>=T){showModal('Fenêtre de temps invalide',`Le temps min (${tMin} min) doit être strictement inférieur au temps max (${T} min).`);return;}
+  if(!activeTypes.size){setStatus('Sélectionne au moins un type','error');showModal('Aucun type sélectionné','Tu dois cocher au moins un type de lieu.');btnRun.disabled=false;return;}
 
-  document.getElementById('btnRun').disabled=true;
+  const address=document.getElementById('address').value.trim();
+  const N=parseInt(document.getElementById('nPlayers').value);
+  const T=parseInt(document.getElementById('tMinutes').value);
+  const Tmin=getMinTimeMinutes();
+  const speedKmh=getSpeedKmh();
+  const speedMs=speedKmh*1000/3600;
+  D.N=N; D.T=T;
+
+  if(!address){setStatus('Saisis une adresse','error');btnRun.disabled=false;return;}
+
+  // 1. GEOCODE
+  setStep('geocode','running');
+  setStatus('Géocodage…','running');
+  let center;
+  try { center=await geocode(address); }
+  catch(e){ setStep('geocode','error'); setStatus('Adresse introuvable','error'); showModal('Adresse introuvable',`"${address}" n'a pas pu être localisée. Vérifie l'orthographe ou utilise la géolocalisation 📍.`); btnRun.disabled=false; return; }
+  setStep('geocode','done',`${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`);
+  D.center=center;
   clearMap();
   if(D.cameraLayer){map.removeLayer(D.cameraLayer);D.cameraLayer=null;}
-  document.getElementById('statsSection').style.display='none';
-  document.getElementById('resultsList').innerHTML='<div class="empty-state"><div class="compass"><div class="compass-needle" style="animation:spin 1.4s linear infinite;"></div></div><h3>Déploiement en cours</h3><p>Calcul des positions optimales…</p></div>';
+  if(D.departures.itineraryLayer){map.removeLayer(D.departures.itineraryLayer);D.departures.itineraryLayer=null;}
+  if(D.departures.startMarkers.length){D.departures.startMarkers.forEach(m=>map.removeLayer(m));D.departures.startMarkers=[];}
+  map.setView([center.lat,center.lon],14);
+  centerMarker=L.marker([center.lat,center.lon],{icon:L.divIcon({className:'',html:`<div style="background:var(--ink);color:var(--paper);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;border:2px solid var(--white);box-shadow:0 2px 8px rgba(0,0,0,.25);">●</div>`,iconSize:[28,28],iconAnchor:[14,14]})}).addTo(map);
+  drawnLayers.push(centerMarker);
 
-  D.altRegistry={};D.popupState={};D.isochronePoly=null;
-  showStepper();
+  // 2. CAMERAS
+  setStep('cameras','running');
+  if(document.getElementById('cameraToggle').checked){
+    if(D.cameras.length===0) await loadCameras();
+    setStep('cameras','done',`${D.cameras.length.toLocaleString('fr')} caméras`);
+  } else { setStep('cameras','skip','désactivé'); }
 
-  try {
-    // GEOCODE
-    setStatus('Géocodage…','running');setStep('geocode','running');
-    const center=await geocode(address);
-    D.center=center;D.N=N;D.T=T;
-    setStep('geocode','done',center.display.substring(0,50)+'…');
-    centerMarker=L.marker([center.lat,center.lon],{icon:L.divIcon({className:'',html:`<div style="width:20px;height:20px;border-radius:50%;background:#fdfbf5;border:3px solid #0d3d24;box-shadow:0 0 0 4px rgba(13,61,36,.15),0 2px 8px rgba(13,61,36,.3);"></div>`,iconSize:[20,20],iconAnchor:[10,10]})}).addTo(map).bindPopup(`<b style="font-family:'Fraunces',serif;">Point central</b><br><small style="color:#6b6f68;">${center.display}</small>`);
+  // 3. ISOCHRONE
+  setStep('isochrone','running');
+  setStatus('Calcul de la zone isochrone…','running');
+  const isoBadge=document.getElementById('isoBadge');
+  let iso=null;
+  try { iso=await getIsochrone(center,T,speedKmh); }
+  catch(e){ console.warn('Isochrone error:',e.message); }
+  D.isochronePoly=iso;
 
-    // CAMERAS
-    setStep('cameras','running');setStatus('Chargement caméras…','running');
-    await loadCameras();
-    const camCount=D.cameras.length;
-    setStep('cameras','done',camCount>0?`${camCount.toLocaleString('fr')} caméras`:'Désactivé');
-
-    // ISOCHRONE
-    setStep('isochrone','running');setStatus('Zone isochrone (Valhalla)…','running');
-    let isoGeom=null;
-    if(document.getElementById('isochroneToggle').checked){
-      isoGeom=await getIsochrone(center,T,speedKmh);
-      D.isochronePoly=isoGeom;
-      if(isoGeom){
-        try{const isoLayer=L.geoJSON({type:'Feature',geometry:isoGeom},{style:{color:'#0d3d24',weight:1.5,opacity:0.5,fillOpacity:0.05,fillColor:'#0d3d24',dashArray:'5 4'}}).addTo(map);drawnLayers.push(isoLayer);}catch(e){}
-        document.getElementById('isoBadge').textContent='Valhalla ✓';document.getElementById('isoBadge').className='iso-badge active';
-        setStep('isochrone','done','Polygone chargé');
-      }else{document.getElementById('isoBadge').textContent='bbox';document.getElementById('isoBadge').className='iso-badge fallback';setStep('isochrone','skip','Fallback bbox');}
-    }else{setStep('isochrone','skip','Désactivé');document.getElementById('isoBadge').textContent='off';document.getElementById('isoBadge').className='iso-badge fallback';}
-
-    // Afficher caméras sur la carte
-    renderCameraLayer(center, isoGeom);
-
-    // OVERPASS
-    setStep('overpass','running');setStatus(`Recherche des lieux (${activeTypes.size} types)…`,'running');
-    const speedMs=speedKmh*1000/3600;const T_sec=T*60;
-    const rBbox=T_sec*speedMs*1.6;
-    const dLat=rBbox/111320;const dLon=rBbox/(111320*Math.cos(center.lat*Math.PI/180));
-    const bbox=`${center.lat-dLat},${center.lon-dLon},${center.lat+dLat},${center.lon+dLon}`;
-    const elements=await fetchCandidates(bbox);
-    setStep('overpass','done',`${elements.length} éléments`);
-
-    // FILTER + SCORE (avec caméras)
-    setStep('filter','running');setStatus('Filtrage et scoring (caméras incluses)…','running');
-    const tMinSec=getMinTimeMinutes()*60;
-    const rMin=tMinSec>0?tMinSec*speedMs*0.7:0;
-    const rMax=T_sec*speedMs*1.8;
-    const candidates=[];
-    for(const el of elements){
-      const clat=el.lat??el.center?.lat;const clon=el.lon??el.center?.lon;
-      if(!clat||!clon) continue;
-      const tags=el.tags||{};
-      const ptype=detectType(tags);if(!ptype) continue;
-      const distGeo=haversine(center,{lat:clat,lon:clon});
-      if(distGeo<rMin||distGeo>rMax) continue;
-      if(isoGeom&&!isInIsochrone(isoGeom,clat,clon)) continue;
-      const bonuses=detectBonuses(tags);
-      const brg=bearing(center,{lat:clat,lon:clon});
-      const pseudoCand={type:ptype,tags,lat:clat,lon:clon};
-      const camCt=countCamerasNear(clat,clon,getCameraRadius());
-      const compScore=computeScore(pseudoCand);
-      candidates.push({
-        lat:clat,lon:clon,
-        name:tags.name||tags['name:fr']||ptype,
-        type:ptype,
-        wait_score:compScore,
-        camera_count:camCt,
-        tags,bonuses,
-        dist_geo:distGeo,bearing:brg,
-        walk_sec:estimateWalkSec(distGeo,speedKmh),
-        walk_min:estimateWalkSec(distGeo,speedKmh)/60,
-        walkTimeIsReal:false,
-      });
-    }
-
-    if(candidates.length<N){throw new Error(`Seulement ${candidates.length} lieux trouvés pour ${N} joueurs.`);}
-    setStep('filter','done',`${candidates.length} candidats`);
-    D.geoFiltered=candidates;
-
-    // TRI
-    setStep('sectors','running');
-    const midSec=(tMinSec+T_sec)/2;
-    const sorted=[...candidates].sort((a,b)=>b.wait_score-a.wait_score||Math.abs(a.walk_sec-midSec)-Math.abs(b.walk_sec-midSec));
-    setStep('sectors','done',`${sorted.length} triés`);
-
-    // WALK TIMES
-    setStep('osrm','running');
-    const BATCH_LIMIT=Math.min(500,K*N*3);const prePool=sorted.slice(0,BATCH_LIMIT);
-    setStatus(`Calcul Valhalla matrix (${prePool.length} lieux)…`,'running');
-    const VALHALLA_BATCH=80;
-    for(let b=0;b<prePool.length;b+=VALHALLA_BATCH){
-      const batch=prePool.slice(b,b+VALHALLA_BATCH);
-      const times=await getWalkTimes(center,batch);
-      batch.forEach((c,i)=>{if(times[i]!=null&&times[i]<9999){c.walk_sec=times[i];c.walk_min=c.walk_sec/60;c.walkTimeIsReal=true;}});
-      setStatus(`Valhalla… ${Math.min(b+VALHALLA_BATCH,prePool.length)}/${prePool.length}`,'running');
-    }
-    D.prePool=prePool;setStep('osrm','done',`${prePool.length} temps`);
-
-    // SELECT
-    setStep('select','running');setStatus('Sélection optimale…','running');
-    const minSpacing=getMinSpacing();const selected=[];
-    const validPool=prePool.filter(c=>c.walkTimeIsReal&&c.walk_sec>=tMinSec&&c.walk_sec<=T_sec).sort((a,b)=>b.wait_score-a.wait_score||Math.abs(a.walk_sec-midSec)-Math.abs(b.walk_sec-midSec));
-    for(const cand of validPool){
-      if(selected.length>=N) break;
-      const tooClose=minSpacing>0&&selected.some(s=>haversine(s,cand)<minSpacing);
-      if(tooClose) continue;
-      selected.push(cand);
-    }
-
-    if(!selected.length){showModal('Aucun résultat',`Aucun lieu ne correspond à la fenêtre [${getMinTimeMinutes()}–${T} min].`);throw new Error('Aucun candidat valide — voir modal');}
-    if(selected.length<N){showModal(`${selected.length}/${N} positions trouvées`,`Seulement ${selected.length} lieux respectent les contraintes.`,false);}
-    setStep('select',selected.length<N?'error':'done',`${selected.length}/${N}`);
-    D.selected=selected;
-
-    // ELEVATION
-    try{const elevs=await getElevations([center,...selected]);const centerElev=elevs[0];selected.forEach((p,i)=>{p.elevation=elevs[i+1];if(centerElev!=null&&p.elevation!=null){p.walk_min_adj=adjustTimeForElevation(p.walk_min,centerElev,p.elevation);p.elev_gain=Math.max(0,p.elevation-centerElev);}});}catch(e){}
-
-    // RENDER
-    setStep('enrich','running');setStatus('Tracé des itinéraires…','running');
-    renderResults(selected,center,N,T,T_sec);
-
-    for(let i=0;i<selected.length;i++){(async(idx)=>{const routeCoords=await getWalkRoute(center,selected[idx]);if(D.lines[idx]){D.lines[idx].setLatLngs(routeCoords);D.lines[idx].setStyle({dashArray:null,opacity:0.55,weight:3,color:COLORS[idx%COLORS.length]});}})(i);}
-    enrichAllWalkTimes(center,D.geoFiltered.filter(c=>!D.selected.includes(c))).then(()=>{setStep('enrich','done','Alternatives ✓');setStatus(`${selected.length} positions trouvées ✓`,'ok');});
-
-  }catch(e){
-    if(!e.message.includes('voir modal')){setStatus('Erreur : '+e.message,'error');setStep('select','error',e.message);if(!e.message.includes('Aucun candidat')) showModal('Erreur inattendue',e.message,false);}
-    console.error(e);
+  let bbox;
+  if(iso){
+    isoBadge.className='iso-badge active'; isoBadge.textContent='Valhalla';
+    setStep('isochrone','done','via Valhalla');
+    L.geoJSON(iso,{style:{color:'#0d3d24',weight:1.5,opacity:0.5,fillColor:'#0d3d24',fillOpacity:0.05,dashArray:'4 4'}}).addTo(map).eachLayer(l=>drawnLayers.push(l));
+    let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
+    function walkCoords(c){if(typeof c[0]==='number'){minLat=Math.min(minLat,c[1]);maxLat=Math.max(maxLat,c[1]);minLon=Math.min(minLon,c[0]);maxLon=Math.max(maxLon,c[0]);}else c.forEach(walkCoords);}
+    walkCoords(iso.coordinates);
+    bbox=`${minLat},${minLon},${maxLat},${maxLon}`;
+  } else {
+    isoBadge.className='iso-badge fallback'; isoBadge.textContent='Estimation';
+    setStep('isochrone','skip','estimation par cercle');
+    const r=T*60*speedMs*1.3,latDeg=r/111320,lonDeg=r/(111320*Math.cos(center.lat*Math.PI/180));
+    bbox=`${center.lat-latDeg},${center.lon-lonDeg},${center.lat+latDeg},${center.lon+lonDeg}`;
   }
-  document.getElementById('btnRun').disabled=false;
+
+  renderCameraLayer(center,iso);
+
+  // 4. OVERPASS
+  setStep('overpass','running');
+  setStatus('Recherche des lieux…','running');
+  let elements;
+  try { elements=await fetchCandidates(bbox); }
+  catch(e){ setStep('overpass','error'); setStatus('Overpass inaccessible','error'); showModal('Service indisponible','Le service de recherche de lieux est temporairement saturé. Réessaie dans quelques secondes.'); btnRun.disabled=false; return; }
+  setStep('overpass','done',`${elements.length} éléments`);
+
+  // 5. FILTER
+  setStep('filter','running');
+  const T_sec=T*60,Tmin_sec=Tmin*60,maxDistGeo=T_sec*speedMs;
+  let geoFiltered=[];
+  for(const e of elements){
+    const lat=e.lat||(e.center&&e.center.lat),lon=e.lon||(e.center&&e.center.lon);
+    if(!lat||!lon) continue;
+    const tags=e.tags||{};
+    const type=detectType(tags);
+    if(!type) continue;
+    if(iso&&!isInIsochrone(iso,lat,lon)) continue;
+    const distGeo=haversine(center,{lat,lon});
+    if(distGeo>maxDistGeo) continue;
+    const estSec=estimateWalkSec(distGeo,speedKmh);
+    if(estSec>T_sec) continue;
+    geoFiltered.push({lat,lon,name:tags.name||(PLACE_TYPES.find(p=>p.id===type)?.label),type,tags,distGeo,walk_sec:estSec,walk_min:estSec/60,walkTimeIsReal:false,score:0,sector:0,bonuses:detectBonuses(tags)});
+  }
+  setStep('filter','done',`${geoFiltered.length} lieux dans la zone`);
+  D.geoFiltered=geoFiltered;
+
+  if(geoFiltered.length<N){
+    setStep('sectors','error');
+    setStatus(`Seulement ${geoFiltered.length} lieux trouvés`,'error');
+    showModal('Pas assez de lieux',`Seulement ${geoFiltered.length} lieux trouvés pour ${N} joueurs.\n\nEssaie : augmenter le temps max, élargir les types de lieux, ou réduire le nombre de joueurs.`);
+    btnRun.disabled=false; return;
+  }
+
+  // 6. SCORES
+  setStep('sectors','running');
+  geoFiltered.forEach(c=>{c.score=computeScore(c);c.bearingDeg=bearing(center,c);});
+  setStep('sectors','done');
+
+  // 7. WALK TIMES (top 200)
+  setStep('osrm','running');
+  setStatus('Temps de marche réels…','running');
+  const top=geoFiltered.slice().sort((a,b)=>b.score-a.score).slice(0,Math.min(200,geoFiltered.length));
+  await enrichAllWalkTimes(center,top);
+  let realCount=top.filter(c=>c.walkTimeIsReal).length;
+  setStep('osrm','done',`${realCount}/${top.length} temps réels`);
+
+  // Filtre Tmin
+  let pool=top.filter(c=>c.walk_sec>=Tmin_sec&&c.walk_sec<=T_sec);
+  if(pool.length<N){
+    pool=geoFiltered.filter(c=>c.walk_sec>=Tmin_sec&&c.walk_sec<=T_sec).sort((a,b)=>b.score-a.score);
+    if(pool.length<N){
+      setStep('select','error');
+      setStatus(`${pool.length} lieux dans la fenêtre [${Tmin}..${T}] min`,'error');
+      showModal('Pas assez de lieux dans la fenêtre',`Seulement ${pool.length} lieux entre ${Tmin} et ${T} min de marche.\n\nÉlargis la fenêtre temporelle ou réduis le nombre de joueurs.`);
+      btnRun.disabled=false; return;
+    }
+  }
+
+  // 8. SELECT
+  setStep('select','running');
+  setStatus('Sélection optimale…','running');
+  const selected=[];
+  const minSpace=getMinSpacing();
+  const sorted=pool.slice().sort((a,b)=>b.score-a.score);
+  const sectors=Array.from({length:N},(_,i)=>({startDeg:i*(360/N),endDeg:(i+1)*(360/N),candidates:[]}));
+  sorted.forEach(c=>{const s=Math.floor(c.bearingDeg/(360/N))%N;if(sectors[s]) sectors[s].candidates.push(c);});
+
+  for(let i=0;i<N;i++){
+    const sec=sectors[i];
+    const desired=(i+0.5)*(360/N);
+    let best=null,bestVal=-Infinity;
+    for(const c of sorted){
+      if(selected.includes(c)) continue;
+      if(minSpace>0&&selected.some(s=>haversine(s,c)<minSpace)) continue;
+      const ang=angularDist(c.bearingDeg,desired);
+      const angScore=Math.max(0,(180-ang)/180);
+      const inSector=c.bearingDeg>=sec.startDeg&&c.bearingDeg<sec.endDeg;
+      const val=c.score*0.6+angScore*40*0.3+(inSector?20:0);
+      if(val>bestVal){bestVal=val;best=c;}
+    }
+    if(best){best.sector=i;selected.push(best);}
+  }
+  setStep('select','done',`${selected.length} sélectionnés`);
+
+  // 9. ENRICH
+  setStep('enrich','running');
+  if(selected.some(s=>!s.walkTimeIsReal)) await enrichAllWalkTimes(center,selected);
+  const elevations=await getElevations([center,...selected]);
+  selected.forEach((s,i)=>{s.elevation=elevations[i+1];s.walk_min_adjusted=adjustTimeForElevation(s.walk_min,elevations[0],s.elevation);});
+  setStep('enrich','done');
+
+  D.selected=selected;
+  D.prePool=pool;
+
+  document.getElementById('progressStepper').classList.remove('visible');
+  setStatus(`✓ ${selected.length} positions générées`,'ok');
+
+  renderResults();
+
+  document.getElementById('btnValidateDeploy').disabled=false;
+  if(D.tabs.deploymentValidated) markDeparturesStale();
+
+  btnRun.disabled=false;
 }
 
 // ═══════════════════════════════════════════════════════════
 // RENDER RESULTS
 // ═══════════════════════════════════════════════════════════
-function renderResults(selected, center, N, T, T_sec) {
-  D.markers=[]; D.lines=[];
-  const wm=selected.map(p=>p.walk_min_adj||p.walk_min);
-  const mean=wm.reduce((a,b)=>a+b,0)/wm.length;
-  const std=Math.sqrt(wm.map(t=>(t-mean)**2).reduce((a,b)=>a+b,0)/wm.length);
-  const dists=[];
-  for(let i=0;i<selected.length;i++) for(let j=i+1;j<selected.length;j++) dists.push(haversine(selected[i],selected[j]));
+function renderResults() {
+  const list=document.getElementById('resultsList');
+  const stats=document.getElementById('statsSection');
+  const center=D.center,selected=D.selected;
+  if(!selected.length){list.innerHTML='';return;}
 
-  const totalCamsInArea = D.cameras.filter(c => isInIsochrone(D.isochronePoly, c.lat, c.lon)).length;
-
-  document.getElementById('statsSection').style.display='';
-  const _tMin=getMinTimeMinutes();const _spacing=getMinSpacing();
+  // Stats
+  const realTimes=selected.filter(s=>s.walkTimeIsReal).map(s=>s.walk_min);
+  const avgT=realTimes.length?realTimes.reduce((a,b)=>a+b,0)/realTimes.length:0;
+  const minT=Math.min(...selected.map(s=>s.walk_min));
+  const maxT=Math.max(...selected.map(s=>s.walk_min));
+  const avgScore=selected.reduce((a,b)=>a+b.score,0)/selected.length;
+  stats.style.display='block';
   document.getElementById('statsContent').innerHTML=`
-    <div class="stat-row"><span>Temps moyen</span><b>${mean.toFixed(1)} min</b></div>
-    <div class="stat-row"><span>Écart-type</span><b>${std.toFixed(2)} min</b></div>
-    <div class="stat-row"><span>Min / Max</span><b>${Math.min(...wm).toFixed(1)} / ${Math.max(...wm).toFixed(1)} min</b></div>
-    <div class="stat-row"><span>Fenêtre demandée</span><b>${_tMin}–${T} min</b></div>
-    <div class="stat-row"><span>Distance min inter</span><b>${Math.round(Math.min(...dists))} m</b></div>
-    <div class="stat-row"><span>Distance max inter</span><b>${Math.round(Math.max(...dists))} m</b></div>
-    ${_spacing>0?`<div class="stat-row"><span>Distance min imposée</span><b>${_spacing} m</b></div>`:''}
-    <div class="stat-row"><span>Caméras dans zone</span><b style="color:${totalCamsInArea>10?'var(--camera)':'var(--forest)'}">📹 ${totalCamsInArea}</b></div>
-    <div class="stat-row"><span>Routage</span><b>Valhalla ✓</b></div>
-    <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-      <button onclick="exportCSV()" class="btn-small" style="padding:8px;">↓ CSV</button>
-      <button onclick="exportGPX()" class="btn-small" style="padding:8px;">↓ GPX</button>
-      <button onclick="exportVersion()" class="btn-small" style="padding:8px;">💾 Sauver</button>
-      <button onclick="document.getElementById('importFile').click()" class="btn-small" style="padding:8px;">📂 Charger</button>
-      <button onclick="exportMapPNG()" class="btn-small" style="padding:8px;grid-column:span 2;">🖼 Exporter carte (PNG)</button>
+    <div class="stat-row"><span>Temps moyen</span><b>${avgT.toFixed(1)} min</b></div>
+    <div class="stat-row"><span>Min · Max</span><b>${minT.toFixed(1)} – ${maxT.toFixed(1)} min</b></div>
+    <div class="stat-row"><span>Score moyen</span><b>${avgScore.toFixed(1)}/10</b></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:14px;">
+      <button class="btn-small" onclick="exportCSV()">📊 CSV</button>
+      <button class="btn-small" onclick="exportGPX()">📍 GPX</button>
+      <button class="btn-small" onclick="exportMapPNG()">🖼 PNG</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
+      <button class="btn-small" onclick="exportVersion()">💾 Sauver</button>
+      <button class="btn-small" onclick="document.getElementById('importFile').click()">📂 Charger</button>
     </div>`;
 
-  const minSpacingViz=getMinSpacing();
-  if(minSpacingViz>0){selected.forEach((p,i)=>{const color=COLORS[i%COLORS.length];const circle=L.circle([p.lat,p.lon],{radius:minSpacingViz,color,weight:1,opacity:0.35,fillColor:color,fillOpacity:0.06,dashArray:'4 4',interactive:false}).addTo(map);drawnLayers.push(circle);});}
-
-  const list=document.getElementById('resultsList');list.innerHTML='';
-  const header=document.createElement('div');
-  header.style.cssText='padding:14px 22px 8px;border-bottom:1px solid var(--paper-line);';
-  header.innerHTML=`<div style="font-family:'JetBrains Mono',monospace;font-size:.62rem;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);display:flex;align-items:center;gap:8px;"><span style="width:14px;height:1px;background:var(--ink-4);"></span><span>Positions · ${selected.length}</span></div>`;
-  list.appendChild(header);
-
-  selected.forEach((p,i)=>{
+  // Map markers
+  list.innerHTML='';
+  selected.forEach((c,i)=>{
     const color=COLORS[i%COLORS.length];
-    const icon=iconChip(p.type,16);
-    const stars='★'.repeat(Math.min(p.wait_score,10))+'☆'.repeat(Math.max(0,10-p.wait_score));
-    const walkMin=p.walk_min_adj||p.walk_min;
-    const timeLabel=p.walkTimeIsReal?`<span class="time-real">⏱ ${walkMin.toFixed(1)} min</span>`:`<span class="time-est">⏱ ~${walkMin.toFixed(1)} min</span>`;
-    const elevHtml=p.elev_gain>0?`<div style="font-size:.63rem;color:var(--ochre);margin-top:3px;font-family:'JetBrains Mono',monospace;">↗ +${Math.round(p.elev_gain)}m</div>`:'';
-    const camCt=p.camera_count||0;
-
-    const popup=buildAlternativesPopup(i,p,color);
-    const line=L.polyline([[center.lat,center.lon],[p.lat,p.lon]],{color:COLORS[i%COLORS.length],opacity:0.25,weight:1.5,dashArray:'5 7'}).addTo(map);
-    const marker=L.marker([p.lat,p.lon],{draggable:true,icon:L.divIcon({className:'',html:`<div style="width:32px;height:32px;border-radius:6px;background:${color};color:#fdfbf5;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:600;font-size:13px;border:2px solid rgba(255,255,255,.5);box-shadow:0 2px 8px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.15);cursor:grab;">${i+1}</div>`,iconSize:[32,32],iconAnchor:[16,16]})}).addTo(map).bindPopup(popup,{maxWidth:280});
-
-    marker.on('drag',e=>{const ll=e.target.getLatLng();line.setLatLngs([[center.lat,center.lon],[ll.lat,ll.lng]]);});
+    const marker=L.marker([c.lat,c.lon],{
+      icon:L.divIcon({className:'',html:`<div style="background:${color};color:#fdfbf5;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;border:2px solid #fdfbf5;box-shadow:0 2px 8px rgba(0,0,0,.25);">${i+1}</div>`,iconSize:[32,32],iconAnchor:[16,16]}),
+      draggable:true
+    }).addTo(map);
     marker.on('dragend',async e=>{
-      saveLastMove(i);const ll=e.target.getLatLng();
+      const ll=e.target.getLatLng();
+      saveLastMove(i,c.lat,c.lon);
       const newName=await reverseGeocode(ll.lat,ll.lng);
-      const sec=await calculateSingleWalkTime(center,{lat:ll.lat,lon:ll.lng});
-      const walkM=sec!=null?sec/60:p.walk_min;
-      const newCamCt=countCamerasNear(ll.lat,ll.lng,getCameraRadius());
-      D.selected[i]={...D.selected[i],lat:ll.lat,lon:ll.lng,name:newName,walk_min:walkM,walk_sec:walkM*60,walk_min_adj:null,bonuses:[],wait_score:5,type:'custom',tags:{},walkTimeIsReal:sec!=null,camera_count:newCamCt};
-      const updPop=buildAlternativesPopup(i,D.selected[i],color);marker.setPopupContent(updPop);marker.openPopup();
-      const nameEl=document.getElementById('result-name-'+i);if(nameEl) nameEl.textContent=newName;
-      const metaEl=document.getElementById('result-meta-'+i);if(metaEl) metaEl.innerHTML=`<span>📍 déplacé</span><span class="time-real">⏱ ${walkM.toFixed(1)} min</span>`;
-      getWalkRoute(center,D.selected[i]).then(coords=>line.setLatLngs(coords));
+      const newWalkSec=await calculateSingleWalkTime(center,{lat:ll.lat,lon:ll.lng});
+      c.lat=ll.lat;c.lon=ll.lng;c.name=newName;
+      if(newWalkSec!=null){c.walk_sec=newWalkSec;c.walk_min=newWalkSec/60;c.walkTimeIsReal=true;}
+      const line=D.lines[i];
+      if(line){const route=await getWalkRoute(center,c);line.setLatLngs(route);}
+      renderResults();
+      if(D.tabs.deploymentValidated) markDeparturesStale();
+    });
+    drawnLayers.push(marker);
+    D.markers[i]=marker;
+
+    // Popup avec alternatives
+    marker.bindPopup(buildAlternativesPopup(c,i),{maxWidth:340});
+    marker.on('popupopen',()=>{D.popupState[i]={open:true};});
+    marker.on('popupclose',()=>{delete D.popupState[i];});
+
+    getWalkRoute(center,c).then(route=>{
+      const line=L.polyline(route,{color,weight:2.5,opacity:0.55,dashArray:'4 6'}).addTo(map);
+      drawnLayers.push(line); D.lines[i]=line;
     });
 
-    drawnLayers.push(marker,line);D.markers[i]=marker;D.lines[i]=line;
-
+    const camCount=countCamerasNear(c.lat,c.lon,getCameraRadius());
     const item=document.createElement('div');
     item.className='result-item';
+    const distTxt=`${(c.distGeo/1000).toFixed(2)} km`;
+    const timeTxt=c.walkTimeIsReal?`<span class="time-real">${c.walk_min.toFixed(1)} min</span>`:`<span class="time-est">~${c.walk_min.toFixed(1)} min</span>`;
+    const stars='★'.repeat(Math.round(c.score/2));
     item.innerHTML=`
-      <div class="result-num" style="background:${color}">${i+1}</div>
+      <div class="result-num" style="background:${color};">${i+1}</div>
       <div class="result-info">
-        <div class="result-name" id="result-name-${i}">${p.name}</div>
-        <div class="result-meta" id="result-meta-${i}">
-          <span style="display:inline-flex;align-items:center;gap:5px;">${icon}<span>${p.type}</span></span>${timeLabel}
-        </div>
-        <div class="result-stars">${stars} <span style="font-family:'JetBrains Mono',monospace;font-size:.66rem;">${p.wait_score}/10</span></div>
-        ${elevHtml}
-        <div class="result-discretion">${discretionBadge(p.tags,camCt)}</div>
-        ${cameraBadge(camCt)}
-        ${p.bonuses.length?`<div class="result-bonus">${p.bonuses.join(' · ')}</div>`:''}
+        <div class="result-name">${iconChip(c.type,16)} ${c.name}</div>
+        <div class="result-meta"><span>${distTxt}</span>${timeTxt}<span>·</span><span>${c.score}/10</span></div>
+        <div class="result-stars">${stars}</div>
+        <div class="result-discretion">${discretionBadge(c.tags||{},camCount)}</div>
+        ${cameraBadge(camCount)}
+        ${c.bonuses.length?`<div class="result-bonus">${c.bonuses.join(' · ')}</div>`:''}
       </div>`;
-
-    item.addEventListener('mouseenter',()=>D.markers[i]?.getElement()?.classList.add('marker-highlight'));
-    item.addEventListener('mouseleave',()=>D.markers[i]?.getElement()?.classList.remove('marker-highlight'));
-    item.onclick=()=>{map.setView([p.lat,p.lon],17);marker.openPopup();};
+    item.onclick=()=>{map.setView([c.lat,c.lon],17);marker.openPopup();};
+    item.onmouseenter=()=>marker._icon&&marker._icon.classList.add('marker-highlight');
+    item.onmouseleave=()=>marker._icon&&marker._icon.classList.remove('marker-highlight');
     list.appendChild(item);
   });
 
-  map.fitBounds([[center.lat,center.lon],...selected.map(p=>[p.lat,p.lon])],{padding:[50,50]});
-  setStatus(`${selected.length} positions trouvées ✓`,'ok');
+  if(selected.length){
+    const all=[[center.lat,center.lon],...selected.map(s=>[s.lat,s.lon])];
+    map.fitBounds(L.latLngBounds(all),{padding:[40,40]});
+  }
+  undoControl();
 }
 
-document.getElementById('address').addEventListener('keydown',e=>{if(e.key==='Enter') run();});
-
-function getSectorAlternatives(playerIdx,currentCandidate){
-  const T_sec=D.T*60;const tMinSec=getMinTimeMinutes()*60;
-  const brg=currentCandidate.bearing??bearing(D.center,currentCandidate);
-  return D.geoFiltered.filter(c=>{
-    if(c===currentCandidate) return false;
-    const cBrg=c.bearing??bearing(D.center,c);
-    if(angularDist(cBrg,brg)>=45) return false;
-    const ws=c.walk_sec??estimateWalkSec(c.dist_geo,getSpeedKmh());
-    return ws>=tMinSec&&ws<=T_sec;
-  }).map(c=>({...c,walk_sec:c.walk_sec??estimateWalkSec(c.dist_geo,getSpeedKmh()),walk_min:c.walk_min??(estimateWalkSec(c.dist_geo,getSpeedKmh())/60)})).sort((a,b)=>b.wait_score-a.wait_score||b.walk_sec-a.walk_sec);
+// ═══════════════════════════════════════════════════════════
+// ALTERNATIVES & SWAP
+// ═══════════════════════════════════════════════════════════
+function getSectorAlternatives(currentIdx, count=8) {
+  const cur = D.selected[currentIdx];
+  if(!cur || !D.prePool) return [];
+  const sectorSize = 360/D.N;
+  const used = new Set(D.selected.map(s=>`${s.lat.toFixed(5)},${s.lon.toFixed(5)}`));
+  return D.prePool
+    .filter(c=>{
+      const k=`${c.lat.toFixed(5)},${c.lon.toFixed(5)}`;
+      if(used.has(k)) return false;
+      const ang=angularDist(c.bearingDeg, cur.bearingDeg);
+      return ang < sectorSize*0.7;
+    })
+    .sort((a,b)=>b.score-a.score)
+    .slice(0, count);
 }
 
-function buildAlternativesPopup(playerIdx,currentCandidate,color){
-  const MAX_ALTS=5;const alts=getSectorAlternatives(playerIdx,currentCandidate).slice(0,MAX_ALTS);
-  const icon=iconChip(currentCandidate.type,16);
-  const stars='★'.repeat(Math.min(currentCandidate.wait_score,10))+'☆'.repeat(Math.max(0,10-currentCandidate.wait_score));
-  const walkMin=currentCandidate.walk_min_adj||currentCandidate.walk_min||0;
-  const timeStr=currentCandidate.walkTimeIsReal?`${walkMin.toFixed(1)} min`:`~${walkMin.toFixed(1)} min`;
-  const camCt=currentCandidate.camera_count||0;
-  const camHtml=D.cameras.length?`<div style="margin-top:4px;font-size:10px;${camCt>0?'color:#c0392b;':'color:#0d3d24;'}">📹 ${camCt} caméra${camCt>1?'s':''} (r=${getCameraRadius()}m)</div>`:'';
+function buildAlternativesPopup(c,i) {
+  const camCount = countCamerasNear(c.lat,c.lon,getCameraRadius());
+  const alternatives = getSectorAlternatives(i, 6);
+  D.altRegistry[i] = alternatives;
 
-  const bonusItems=(currentCandidate.bonuses||[]).map(b=>`<div style="padding:2px 0;font-size:11px;color:#3a3f3a;">${b}</div>`).join('');
-  const bonusSection=(currentCandidate.bonuses||[]).length?`<div style="margin-top:8px;padding-top:7px;border-top:1px solid #d9d2bd;"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#6b6f68;margin-bottom:4px;">Bonus</div>${bonusItems}</div>`:'';
-  const elevHtml=(currentCandidate.elev_gain>0)?`<div style="font-size:10px;color:#b8862a;margin-top:4px;font-family:'JetBrains Mono',monospace;">↗ +${Math.round(currentCandidate.elev_gain)}m</div>`:'';
-  const svLink=`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${currentCandidate.lat},${currentCandidate.lon}`;
-  const stateKey=`p${playerIdx}`;
-  D.popupState[stateKey]={playerIdx,color,currentCandidate};
-
-  let altsHtml='';
-  if(alts.length){
-    const altItems=alts.map(alt=>{
-      const altIcon=iconChip(alt.type,14);const altKey=`alt_${playerIdx}_${D.geoFiltered.indexOf(alt)}`;D.altRegistry[altKey]=alt;
-      const timeNote=alt.walkTimeIsReal?alt.walk_min.toFixed(1):`~${alt.walk_min.toFixed(1)}`;
-      const altCam=alt.camera_count||0;
-      const camNote=D.cameras.length?(altCam>0?` · 📹${altCam}`:''):'';
-      return`<div onclick="previewAlternative(${playerIdx},'${altKey}','${stateKey}')"
-        style="padding:7px 9px;border:1px solid #d9d2bd;border-radius:4px;cursor:pointer;margin-bottom:5px;background:#fdfbf5;transition:all .12s;"
-        onmouseover="this.style.background='#e3ecde';this.style.borderColor='#0d3d24'"
-        onmouseout="this.style.background='#fdfbf5';this.style.borderColor='#d9d2bd'">
-        <div style="font-size:11.5px;font-weight:500;color:#1a1d1a;display:flex;align-items:center;gap:6px;">${altIcon}<span>${alt.name}</span></div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#6b6f68;margin-top:2px;">⏱ ${timeNote} min · ${alt.wait_score}/10${camNote}</div>
-      </div>`;
-    }).join('');
-    altsHtml=`<div style="margin-top:10px;padding-top:8px;border-top:1px solid #d9d2bd;"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#6b6f68;margin-bottom:6px;">Alternatives</div>${altItems}</div>`;
-  }else{altsHtml=`<div style="margin-top:10px;font-size:10px;color:#9a9d96;font-style:italic;">Aucune alternative.</div>`;}
-
-  return`<div style="min-width:230px;max-height:480px;overflow-y:auto;font-family:'Inter Tight',sans-serif;">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-      <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:4px;background:${color};color:#fdfbf5;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;">${playerIdx+1}</span>
-      <div style="font-family:'Fraunces',serif;font-weight:600;font-size:14px;color:#1a1d1a;letter-spacing:-.01em;">${currentCandidate.name}</div>
+  let html = `<div style="font-family:'Inter Tight',sans-serif;min-width:280px;">
+    <div style="font-family:'Fraunces',serif;font-size:1rem;font-weight:600;color:var(--ink);margin-bottom:6px;">${iconChip(c.type,18)} ${c.name}</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--ink-3);margin-bottom:10px;">
+      ${(c.distGeo/1000).toFixed(2)} km · ${c.walk_min.toFixed(1)} min · ${c.score}/10
     </div>
-    <div style="color:#6b6f68;font-size:11px;display:flex;align-items:center;gap:6px;">${icon}<span>${currentCandidate.type}</span></div>
-    <div style="margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:12px;">⏱ <b>${timeStr}</b></div>
-    <div style="color:#0d3d24;font-size:11px;margin-top:3px;">${stars} <b style="font-family:'JetBrains Mono',monospace;">${currentCandidate.wait_score}/10</b></div>
-    <div style="font-size:10px;margin-top:3px;">${discretionBadge(currentCandidate.tags||{},camCt)}</div>
-    ${camHtml}${elevHtml}${bonusSection}
-    <a href="${svLink}" target="_blank" style="display:block;margin-top:10px;padding:7px 10px;background:#e3ecde;color:#0d3d24;text-decoration:none;text-align:center;font-size:11px;font-weight:600;border-radius:4px;letter-spacing:.02em;">👁 Voir Street View</a>
-    ${altsHtml}
-    <div style="margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:9px;color:#9a9d96;">${currentCandidate.lat.toFixed(5)}, ${currentCandidate.lon.toFixed(5)}</div>
+    <div style="font-size:.75rem;margin-bottom:10px;">${discretionBadge(c.tags||{},camCount)}</div>`;
+
+  if(alternatives.length) {
+    html += `<div style="font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--ink-3);letter-spacing:.1em;text-transform:uppercase;border-top:1px solid var(--paper-line);padding-top:10px;margin-top:6px;margin-bottom:6px;">Alternatives proches</div>
+      <div style="max-height:200px;overflow-y:auto;">`;
+    alternatives.forEach((alt,k)=>{
+      const altCamCount = countCamerasNear(alt.lat,alt.lon,getCameraRadius());
+      html += `<div style="padding:6px 0;border-bottom:1px solid var(--paper-line);display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:.78rem;color:var(--ink);font-weight:500;">${iconChip(alt.type,14)} ${alt.name}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--ink-3);">${alt.walk_min.toFixed(1)}min · ${alt.score}/10${altCamCount>0?` · 📹×${altCamCount}`:''}</div>
+        </div>
+        <div style="display:flex;gap:4px;">
+          <button class="btn-small" style="padding:3px 8px;font-size:.65rem;" onclick="previewAlternative(${i},${k})">👁</button>
+          <button class="btn-small active" style="padding:3px 8px;font-size:.65rem;" onclick="swapCandidateFull(${i},${k})">↔</button>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  } else {
+    html += `<div style="font-size:.72rem;color:var(--ink-4);font-style:italic;">Aucune alternative dans le secteur.</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+async function swapCandidateFull(idx, altIdx) {
+  const alt = D.altRegistry[idx]?.[altIdx];
+  if(!alt) return;
+  saveLastMove(idx, D.selected[idx].lat, D.selected[idx].lon);
+  D.selected[idx] = alt;
+  D.markers[idx]?.closePopup();
+  if(D.lines[idx]) { map.removeLayer(D.lines[idx]); D.lines[idx]=null; }
+  if(D.markers[idx]) { map.removeLayer(D.markers[idx]); }
+  renderResults();
+  if(D.tabs.deploymentValidated) markDeparturesStale();
+}
+
+function previewAlternative(idx, altIdx) {
+  clearPreview();
+  const alt = D.altRegistry[idx]?.[altIdx];
+  if(!alt) return;
+  D.previewState = {idx, altIdx};
+  D.previewMarker = L.marker([alt.lat,alt.lon],{
+    icon:L.divIcon({className:'',html:`<div style="background:var(--ochre);color:var(--paper);width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px dashed var(--white);box-shadow:0 0 16px rgba(184,134,42,.6);animation:preview-pulse 1s ease-in-out infinite alternate;">?</div>`,iconSize:[30,30],iconAnchor:[15,15]})
+  }).addTo(map);
+  getWalkRoute(D.center, alt).then(route=>{
+    D.previewLine = L.polyline(route,{color:'var(--ochre)', weight:2, opacity:0.7, dashArray:'8 4'}).addTo(map);
+  });
+  showPreviewPopup(idx, altIdx);
+}
+
+function showPreviewPopup(idx, altIdx) {
+  const alt = D.altRegistry[idx]?.[altIdx];
+  const cur = D.selected[idx];
+  if(!alt || !cur) return;
+  const html = `<div style="font-family:'Inter Tight',sans-serif;min-width:240px;">
+    <div style="font-size:.7rem;color:var(--ochre);font-weight:600;margin-bottom:6px;">PRÉVISUALISATION</div>
+    <div style="font-size:.85rem;font-weight:600;color:var(--ink);margin-bottom:8px;">${iconChip(alt.type,16)} ${alt.name}</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--ink-3);margin-bottom:10px;">
+      ${alt.walk_min.toFixed(1)} min · ${alt.score}/10<br>
+      <span style="color:var(--ink-4);">vs ${cur.walk_min.toFixed(1)} min · ${cur.score}/10</span>
+    </div>
+    <div style="display:flex;gap:6px;">
+      <button class="btn-small active" style="flex:1;" onclick="confirmPreview()">✓ Confirmer</button>
+      <button class="btn-small" style="flex:1;" onclick="clearPreview()">✕ Annuler</button>
+    </div>
   </div>`;
+  L.popup({autoClose:false, closeButton:false}).setLatLng([alt.lat,alt.lon]).setContent(html).openOn(map);
 }
 
-async function swapCandidateFull(playerIdx,altKey,stateKey){
-  const newC=D.altRegistry[altKey];if(!newC) return;saveLastMove(playerIdx);
-  if(!newC.walkTimeIsReal){const sec=await calculateSingleWalkTime(D.center,newC);if(sec!=null){newC.walk_sec=sec;newC.walk_min=sec/60;newC.walkTimeIsReal=true;}}
-  D.selected[playerIdx]=newC;if(D.popupState[stateKey]) D.popupState[stateKey].currentCandidate=newC;
-  const color=COLORS[playerIdx%COLORS.length];const newPopup=buildAlternativesPopup(playerIdx,newC,color);
-  if(D.markers[playerIdx]){D.markers[playerIdx].setLatLng([newC.lat,newC.lon]);D.markers[playerIdx].setPopupContent(newPopup);D.markers[playerIdx].openPopup();}
-  if(D.lines[playerIdx]) getWalkRoute(D.center,newC).then(coords=>{if(D.lines[playerIdx]) D.lines[playerIdx].setLatLngs(coords);});
-  const icon=iconChip(newC.type,16);
-  const timeLabel=newC.walkTimeIsReal?`<span class="time-real">⏱ ${newC.walk_min.toFixed(1)} min</span>`:`<span class="time-est">⏱ ~${newC.walk_min.toFixed(1)} min</span>`;
-  const nameEl=document.getElementById('result-name-'+playerIdx);const metaEl=document.getElementById('result-meta-'+playerIdx);
-  if(nameEl) nameEl.textContent=newC.name;
-  if(metaEl) metaEl.innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px;">${icon}<span>${newC.type}</span></span>${timeLabel}`;
+function confirmPreview() {
+  if(!D.previewState) return;
+  const {idx, altIdx} = D.previewState;
+  clearPreview();
+  swapCandidateFull(idx, altIdx);
 }
 
-function downloadBlob(content,filename,mime){const blob=new Blob([content],{type:mime});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);}
-
-function exportCSV(){if(!D.selected.length) return;const header=['Joueur','Nom','Type','Latitude','Longitude','Temps_min','Score','Discretion','Cameras','Bonus'];const rows=D.selected.map((p,i)=>[i+1,`"${p.name.replace(/"/g,'""')}"`,p.type,p.lat.toFixed(6),p.lon.toFixed(6),(p.walk_min_adj||p.walk_min).toFixed(1),p.wait_score,computeDiscretionDisplay(p.tags||{}).toFixed(1),p.camera_count||0,`"${(p.bonuses||[]).join(' | ')}"`]);downloadBlob([header,...rows].map(r=>r.join(',')).join('\n'),'deploiement.csv','text/csv;charset=utf-8;');}
-
-function exportGPX(){if(!D.selected.length) return;const waypoints=D.selected.map((p,i)=>`\n  <wpt lat="${p.lat}" lon="${p.lon}">\n    <name>Joueur ${i+1} — ${p.name}</name>\n    <desc>Type: ${p.type} | Temps: ${(p.walk_min_adj||p.walk_min).toFixed(1)} min | Score: ${p.wait_score}/10 | Caméras: ${p.camera_count||0}</desc>\n    <sym>Flag</sym>\n  </wpt>`).join('');const gpx=`<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Deploiement+">\n  <metadata><name>Déploiement — ${D.center?.display||''}</name></metadata>\n  ${waypoints}\n</gpx>`;downloadBlob(gpx,'deploiement.gpx','application/gpx+xml');}
-
-function saveLastMove(playerIdx){if(!D.selected[playerIdx]||!D.lines[playerIdx]) return;D.lastMove={playerIdx,prevCandidate:{...D.selected[playerIdx]},prevLineCoords:D.lines[playerIdx].getLatLngs().map(ll=>[ll.lat,ll.lng])};const btn=document.getElementById('btnUndo');if(btn) btn.disabled=false;}
-
-async function undoLastMove(){if(!D.lastMove) return;const{playerIdx,prevCandidate,prevLineCoords}=D.lastMove;D.selected[playerIdx]=prevCandidate;if(D.markers[playerIdx]){D.markers[playerIdx].setLatLng([prevCandidate.lat,prevCandidate.lon]);const color=COLORS[playerIdx%COLORS.length];D.markers[playerIdx].setPopupContent(buildAlternativesPopup(playerIdx,prevCandidate,color));}if(D.lines[playerIdx]&&prevLineCoords) D.lines[playerIdx].setLatLngs(prevLineCoords);const icon=iconChip(prevCandidate.type,16);const walkM=prevCandidate.walk_min_adj||prevCandidate.walk_min||0;const tLab=prevCandidate.walkTimeIsReal?`<span class="time-real">⏱ ${walkM.toFixed(1)} min</span>`:`<span class="time-est">⏱ ~${walkM.toFixed(1)} min</span>`;const nameEl=document.getElementById('result-name-'+playerIdx);const metaEl=document.getElementById('result-meta-'+playerIdx);if(nameEl) nameEl.textContent=prevCandidate.name;if(metaEl) metaEl.innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px;">${icon}<span>${prevCandidate.type}</span></span>${tLab}`;D.lastMove=null;const btn=document.getElementById('btnUndo');if(btn) btn.disabled=true;setStatus('Annulé ✓','ok');}
-
-const undoControl=L.control({position:'topleft'});
-undoControl.onAdd=function(){const div=L.DomUtil.create('div','undo-control leaflet-bar');div.innerHTML=`<button id="btnUndo" disabled style="background:#fdfbf5;border:1px solid #d9d2bd;width:34px;height:34px;border-radius:5px;cursor:pointer;font-size:18px;box-shadow:0 1px 4px rgba(0,0,0,.12);display:flex;align-items:center;justify-content:center;transition:all .15s;color:#0d3d24;font-weight:600;font-family:'JetBrains Mono',monospace;" title="Annuler (⌘Z)">↶</button>`;L.DomEvent.disableClickPropagation(div);div.querySelector('#btnUndo').onclick=undoLastMove;return div;};
-undoControl.addTo(map);
-document.addEventListener('keydown',(e)=>{if((e.ctrlKey||e.metaKey)&&e.key==='z'&&D.lastMove){e.preventDefault();undoLastMove();}});
-
-async function previewAlternative(playerIdx,altKey,stateKey){
-  const alt=D.altRegistry[altKey];if(!alt) return;clearPreview();
-  D.previewState={playerIdx,candidate:alt,altKey,stateKey,originalCandidate:D.selected[playerIdx]};
-  const color=COLORS[playerIdx%COLORS.length];
-  D.previewLink=L.polyline([[D.selected[playerIdx].lat,D.selected[playerIdx].lon],[alt.lat,alt.lon]],{color:'#b8862a',weight:1.5,dashArray:'2 4',opacity:0.6}).addTo(map);
-  D.previewMarker=L.marker([alt.lat,alt.lon],{icon:L.divIcon({className:'',html:`<div style="width:32px;height:32px;border-radius:6px;background:${color};color:#fdfbf5;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:600;font-size:13px;border:2px dashed #fdfbf5;box-shadow:0 2px 8px rgba(0,0,0,.3);opacity:0.75;animation:preview-pulse 1.2s ease-in-out infinite alternate;">${playerIdx+1}?</div>`,iconSize:[32,32],iconAnchor:[16,16]})}).addTo(map);
-  D.previewLine=L.polyline([[D.center.lat,D.center.lon],[alt.lat,alt.lon]],{color,opacity:0.6,weight:3,dashArray:'8 6'}).addTo(map);
-  getWalkRoute(D.center,alt).then(coords=>{if(D.previewLine) D.previewLine.setLatLngs(coords);});
-  if(!alt.walkTimeIsReal){const sec=await calculateSingleWalkTime(D.center,alt);if(sec!=null){alt.walk_sec=sec;alt.walk_min=sec/60;alt.walkTimeIsReal=true;}}
-  showPreviewPopup(playerIdx,alt);
+function clearPreview() {
+  if(D.previewMarker) { map.removeLayer(D.previewMarker); D.previewMarker=null; }
+  if(D.previewLine) { map.removeLayer(D.previewLine); D.previewLine=null; }
+  D.previewState = null;
+  map.closePopup();
 }
-function showPreviewPopup(playerIdx,alt){if(!D.previewMarker||!D.previewState) return;const icon=iconChip(alt.type,16);const orig=D.previewState.originalCandidate;const tNew=alt.walkTimeIsReal?alt.walk_min.toFixed(1):`~${alt.walk_min.toFixed(1)}`;const tOld=(orig.walk_min_adj||orig.walk_min).toFixed(1);const altCam=alt.camera_count||0;const camNote=D.cameras.length?`<div style="font-size:10px;${altCam>0?'color:#c0392b;':'color:#0d3d24;'}margin-top:3px;">📹 ${altCam} caméra${altCam>1?'s':''}</div>`:'';const popupHtml=`<div style="min-width:240px;font-family:'Inter Tight',sans-serif;"><div style="background:#f0e4c5;border:1px solid #b8862a;color:#7a5a14;padding:7px 10px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;margin-bottom:10px;text-align:center;letter-spacing:.1em;text-transform:uppercase;">👁 Prévisualisation</div><div style="font-family:'Fraunces',serif;font-weight:600;font-size:14px;color:#1a1d1a;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;">${icon}<span>${alt.name}</span></div><div style="margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:11px;"><div>⏱ <b>${tNew} min</b> <span style="color:#9a9d96;">(actuel : ${tOld})</span></div><div style="color:#0d3d24;">★ ${alt.wait_score}/10</div></div>${camNote}<div style="display:flex;gap:6px;margin-top:12px;"><button onclick="confirmPreview()" style="flex:1;padding:9px;background:#0d3d24;color:#fdfbf5;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter Tight',sans-serif;letter-spacing:.02em;">✓ Adopter</button><button onclick="clearPreview()" style="flex:1;padding:9px;background:#fdfbf5;color:#6b6f68;border:1px solid #d9d2bd;border-radius:4px;font-size:11px;cursor:pointer;font-family:'Inter Tight',sans-serif;">✗ Annuler</button></div><div style="margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:9px;color:#9a9d96;text-align:center;">Esc pour annuler</div></div>`;D.previewMarker.bindPopup(popupHtml,{maxWidth:280}).openPopup();}
-function confirmPreview(){if(!D.previewState) return;const{playerIdx,altKey,stateKey}=D.previewState;clearPreview();swapCandidateFull(playerIdx,altKey,stateKey);}
-function clearPreview(){if(D.previewMarker){map.removeLayer(D.previewMarker);D.previewMarker=null;}if(D.previewLine){map.removeLayer(D.previewLine);D.previewLine=null;}if(D.previewLink){map.removeLayer(D.previewLink);D.previewLink=null;}D.previewState=null;}
-document.addEventListener('keydown',(e)=>{if(e.key==='Escape'&&D.previewState) clearPreview();});
 
-function exportVersion(){if(!D.selected.length||!D.center){setStatus('Rien à sauvegarder.','error');return;}const defaultLabel=`${(D.center.display||'').split(',')[0]} - ${D.N} joueurs - ${D.T}min`;const label=prompt('Nom de cette version :',defaultLabel);if(label===null) return;const data={version:'1.0',savedAt:new Date().toISOString(),label,params:{address:document.getElementById('address').value,center:D.center,N:D.N,T:D.T,speedKmh:getSpeedKmh(),minTime:getMinTimeMinutes(),minSpacing:getMinSpacing(),weights:{type:parseInt(document.getElementById('wType').value),comfort:parseInt(document.getElementById('wComfort').value),discretion:parseInt(document.getElementById('wDiscretion').value)},activeTypes:[...activeTypes],customScores:{...customScores},isochroneEnabled:document.getElementById('isochroneToggle').checked,cameraEnabled:document.getElementById('cameraToggle').checked,cameraRadius:getCameraRadius(),cameraPenalty:getCameraPenaltyPerCam()},selected:D.selected,geoFiltered:D.geoFiltered};const safeLabel=label.replace(/[^a-z0-9-_]/gi,'_').slice(0,50);downloadBlob(JSON.stringify(data,null,2),`deploiement_${safeLabel}.json`,'application/json');setStatus('Sauvegardé ✓','ok');}
-
-async function importVersion(event){const file=event.target.files[0];if(!file) return;try{const text=await file.text();const data=JSON.parse(text);if(!data.version||!data.params||!data.selected) throw new Error('Fichier invalide');document.getElementById('address').value=data.params.address||'';document.getElementById('nPlayers').value=data.params.N;document.getElementById('nVal').textContent=data.params.N;document.getElementById('tMinutes').value=data.params.T;document.getElementById('tVal').textContent=data.params.T;document.getElementById('walkSpeed').value=data.params.speedKmh;document.getElementById('speedVal').textContent=data.params.speedKmh;if(data.params.minTime!=null){document.getElementById('tMinMinutes').value=data.params.minTime;document.getElementById('tMinVal').textContent=data.params.minTime;document.getElementById('tMinMinutes').max=Math.max(0,data.params.T-1);}if(data.params.minSpacing!=null){document.getElementById('minSpacing').value=data.params.minSpacing;document.getElementById('minSpacingVal').textContent=data.params.minSpacing;}if(data.params.weights){document.getElementById('wType').value=data.params.weights.type;document.getElementById('wTypeVal').textContent=data.params.weights.type;document.getElementById('wComfort').value=data.params.weights.comfort;document.getElementById('wComfortVal').textContent=data.params.weights.comfort;document.getElementById('wDiscretion').value=data.params.weights.discretion;document.getElementById('wDiscretionVal').textContent=data.params.weights.discretion;}if(data.params.activeTypes){activeTypes.clear();data.params.activeTypes.forEach(id=>activeTypes.add(id));if(data.params.customScores) Object.assign(customScores,data.params.customScores);buildPlaceGrid();}document.getElementById('isochroneToggle').checked=!!data.params.isochroneEnabled;if(data.params.cameraEnabled!=null) document.getElementById('cameraToggle').checked=data.params.cameraEnabled;if(data.params.cameraRadius!=null){document.getElementById('cameraRadius').value=data.params.cameraRadius;document.getElementById('cameraRadiusVal').textContent=data.params.cameraRadius;}if(data.params.cameraPenalty!=null){document.getElementById('cameraPenalty').value=data.params.cameraPenalty;document.getElementById('cameraPenaltyVal').textContent=data.params.cameraPenalty;}D.center=data.params.center;D.N=data.params.N;D.T=data.params.T;D.selected=data.selected;D.geoFiltered=data.geoFiltered||data.selected;D.lastMove=null;clearPreview();clearMap();if(D.cameraLayer){map.removeLayer(D.cameraLayer);D.cameraLayer=null;}centerMarker=L.marker([D.center.lat,D.center.lon],{icon:L.divIcon({className:'',html:`<div style="width:20px;height:20px;border-radius:50%;background:#fdfbf5;border:3px solid #0d3d24;box-shadow:0 0 0 4px rgba(13,61,36,.15);"></div>`,iconSize:[20,20],iconAnchor:[10,10]})}).addTo(map).bindPopup(`<b>Point central</b><br><small style="color:#6b6f68;">${D.center.display||''}</small>`);renderResults(D.selected,D.center,D.N,D.T,D.T*60);for(let i=0;i<D.selected.length;i++){(async(idx)=>{const coords=await getWalkRoute(D.center,D.selected[idx]);if(D.lines[idx]){D.lines[idx].setLatLngs(coords);D.lines[idx].setStyle({dashArray:null,opacity:0.55,weight:3,color:COLORS[idx%COLORS.length]});}})( i);}const btnUndo=document.getElementById('btnUndo');if(btnUndo) btnUndo.disabled=true;setStatus(`"${data.label}" chargé ✓`,'ok');}catch(e){setStatus('Erreur import : '+e.message,'error');}event.target.value='';}
-
-async function exportMapPNG(){if(!D.selected.length||!D.center){showModal('Rien à exporter','Lance un déploiement avant d\'exporter la carte.');return;}setStatus('Génération PNG…','running');const W=900,H=600;const canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;const ctx=canvas.getContext('2d');ctx.fillStyle='#f5f1e8';ctx.fillRect(0,0,W,H);const allPts=[D.center,...D.selected];let minLat=Math.min(...allPts.map(p=>p.lat));let maxLat=Math.max(...allPts.map(p=>p.lat));let minLon=Math.min(...allPts.map(p=>p.lon));let maxLon=Math.max(...allPts.map(p=>p.lon));const padLat=(maxLat-minLat)*0.3||0.003;const padLon=(maxLon-minLon)*0.3||0.004;minLat-=padLat;maxLat+=padLat;minLon-=padLon;maxLon+=padLon;const mapW=W-230,mapH=H-40,mapX=20,mapY=20;function toXY(lat,lon){const x=mapX+(lon-minLon)/(maxLon-minLon)*mapW;const y=mapY+(1-(lat-minLat)/(maxLat-minLat))*mapH;return[x,y];}await drawMapBackground(ctx,mapX,mapY,mapW,mapH,minLat,maxLat,minLon,maxLon);const[cxC,cyC]=toXY(D.center.lat,D.center.lon);D.selected.forEach((p,i)=>{const[px,py]=toXY(p.lat,p.lon);ctx.beginPath();ctx.moveTo(cxC,cyC);ctx.lineTo(px,py);ctx.strokeStyle=COLORS[i%COLORS.length]+'88';ctx.lineWidth=1.5;ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([]);});D.selected.forEach((p,i)=>{const[px,py]=toXY(p.lat,p.lon);const col=COLORS[i%COLORS.length];ctx.shadowColor='rgba(0,0,0,0.25)';ctx.shadowBlur=6;ctx.fillStyle=col;roundRect(ctx,px-14,py-14,28,28,5);ctx.fill();ctx.shadowBlur=0;ctx.fillStyle='#fdfbf5';ctx.font='bold 12px JetBrains Mono, monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(i+1),px,py);});const[cxF,cyF]=toXY(D.center.lat,D.center.lon);ctx.shadowColor='rgba(13,61,36,0.4)';ctx.shadowBlur=10;ctx.beginPath();ctx.arc(cxF,cyF,9,0,Math.PI*2);ctx.fillStyle='#fdfbf5';ctx.fill();ctx.strokeStyle='#0d3d24';ctx.lineWidth=3;ctx.stroke();ctx.shadowBlur=0;drawLegend(ctx,W-220,20,205,H-40);ctx.fillStyle='#1a1d1a';ctx.font='bold 11px JetBrains Mono, monospace';ctx.textAlign='left';ctx.fillText('DÉPLOIEMENT+',mapX,H-8);ctx.fillStyle='#6b6f68';ctx.font='9px JetBrains Mono, monospace';ctx.fillText(new Date().toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'}),mapX+110,H-8);const link=document.createElement('a');link.download=`deploiement_${Date.now()}.png`;link.href=canvas.toDataURL('image/png');link.click();setStatus('PNG exporté ✓','ok');}
-
-async function drawMapBackground(ctx,x,y,w,h,minLat,maxLat,minLon,maxLon){ctx.fillStyle='#ede8d9';ctx.fillRect(x,y,w,h);ctx.strokeStyle='#d9d2bd';ctx.lineWidth=0.5;for(let i=1;i<5;i++){const gx=x+(w/5)*i;const gy=y+(h/5)*i;ctx.beginPath();ctx.moveTo(gx,y);ctx.lineTo(gx,y+h);ctx.stroke();ctx.beginPath();ctx.moveTo(x,gy);ctx.lineTo(x+w,gy);ctx.stroke();}try{const zoom=getBestZoom(maxLat-minLat,maxLon-minLon);const cLat=(minLat+maxLat)/2,cLon=(minLon+maxLon)/2;const url=`https://staticmap.openstreetmap.de/staticmap.php?center=${cLat},${cLon}&zoom=${zoom}&size=${w}x${h}&maptype=mapnik`;const img=await loadImageCORS(url);ctx.drawImage(img,x,y,w,h);}catch(e){}}
-function getBestZoom(dLat,dLon){const span=Math.max(dLat,dLon);if(span>0.2) return 12;if(span>0.05) return 14;if(span>0.01) return 15;return 16;}
-function loadImageCORS(src){return new Promise((resolve,reject)=>{const img=new Image();img.crossOrigin='anonymous';img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('img load failed'));setTimeout(()=>reject(new Error('timeout')),4000);img.src=src;});}
-function drawLegend(ctx,x,y,w,h){ctx.fillStyle='rgba(253,251,245,0.95)';roundRect(ctx,x,y,w,h,6);ctx.fill();ctx.strokeStyle='#d9d2bd';ctx.lineWidth=1;roundRect(ctx,x,y,w,h,6);ctx.stroke();const pad=12;let cy=y+pad+12;ctx.fillStyle='#0d3d24';ctx.font='bold 10px JetBrains Mono, monospace';ctx.textAlign='left';ctx.fillText('DÉPLOIEMENT+',x+pad,cy);cy+=14;ctx.fillStyle='#6b6f68';ctx.font='9px Inter Tight, sans-serif';const addr=(D.center?.display||'').split(',').slice(0,2).join(',').substring(0,28);ctx.fillText(addr,x+pad,cy);cy+=12;ctx.fillStyle='#1a1d1a';ctx.font='9px Inter Tight, sans-serif';ctx.fillText(`${getMinTimeMinutes()}–${D.T} min · ${D.selected.length} pts`,x+pad,cy);cy+=16;ctx.strokeStyle='#d9d2bd';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(x+pad,cy);ctx.lineTo(x+w-pad,cy);ctx.stroke();cy+=10;const lineH=Math.min(18,(h-(cy-y)-pad)/Math.max(1,D.selected.length));D.selected.forEach((p,i)=>{if(cy+lineH>y+h-pad) return;const col=COLORS[i%COLORS.length];ctx.fillStyle=col;roundRect(ctx,x+pad,cy-8,11,11,2);ctx.fill();ctx.fillStyle='#fdfbf5';ctx.font='bold 7px JetBrains Mono, monospace';ctx.textAlign='center';ctx.fillText(String(i+1),x+pad+5.5,cy);ctx.fillStyle='#1a1d1a';ctx.font='9px Inter Tight, sans-serif';ctx.textAlign='left';const wm=(p.walk_min_adj||p.walk_min).toFixed(1);const camTxt=p.camera_count>0?` 📹${p.camera_count}`:'';const label=`${p.name.substring(0,16)} · ${wm}min${camTxt}`;ctx.fillText(label,x+pad+15,cy);cy+=lineH;});}
-function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
-
-// Préchargement caméras au lancement (différé pour s'assurer que le DOM est prêt)
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => loadCameras());
-} else {
-  // DOM déjà prêt
-  setTimeout(() => loadCameras(), 50);
+// ═══════════════════════════════════════════════════════════
+// UNDO
+// ═══════════════════════════════════════════════════════════
+function saveLastMove(idx, oldLat, oldLon) {
+  const old = D.selected[idx];
+  D.lastMove = {idx, snapshot:{...old, lat:oldLat, lon:oldLon}};
+  undoControl();
 }
+function undoLastMove() {
+  if(!D.lastMove) return;
+  const {idx, snapshot} = D.lastMove;
+  D.selected[idx] = snapshot;
+  D.lastMove = null;
+  if(D.markers[idx]) map.removeLayer(D.markers[idx]);
+  if(D.lines[idx]) { map.removeLayer(D.lines[idx]); D.lines[idx]=null; }
+  renderResults();
+  if(D.tabs.deploymentValidated) markDeparturesStale();
+}
+let undoBtnEl = null;
+function undoControl() {
+  if(!undoBtnEl) {
+    undoBtnEl = L.control({position:'bottomleft'});
+    undoBtnEl.onAdd = () => {
+      const div = L.DomUtil.create('div', 'undo-control');
+      div.innerHTML = `<button id="undoBtn" disabled style="background:var(--white);color:var(--ink);border:1px solid var(--paper-line);padding:7px 12px;border-radius:5px;font-family:'Inter Tight',sans-serif;font-size:.72rem;font-weight:500;cursor:pointer;box-shadow:var(--shadow);transition:all .12s;">↶ Annuler</button>`;
+      L.DomEvent.disableClickPropagation(div);
+      div.querySelector('button').onclick = undoLastMove;
+      return div;
+    };
+    undoBtnEl.addTo(map);
+  }
+  const btn = document.getElementById('undoBtn');
+  if(btn) btn.disabled = !D.lastMove;
+}
+document.addEventListener('keydown', e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='z') { e.preventDefault(); undoLastMove(); }
+});
+
+// ═══════════════════════════════════════════════════════════
+// EXPORTS
+// ═══════════════════════════════════════════════════════════
+function downloadBlob(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+function exportCSV() {
+  if(!D.selected.length) return;
+  const center = D.center;
+  let csv = 'N;Nom;Type;Lat;Lon;Distance_km;Temps_min;Score;Bonus;Camera_count;Discret_pts\n';
+  D.selected.forEach((c,i)=>{
+    const camCount = countCamerasNear(c.lat,c.lon,getCameraRadius());
+    const camPenalty = -(camCount * getCameraPenaltyPerCam());
+    const disc = computeDiscretionDisplay(c.tags||{}, camPenalty);
+    const safeName = (c.name||'').replace(/;/g,',').replace(/\n/g,' ');
+    const safeBonus = c.bonuses.join('|').replace(/;/g,',');
+    csv += `${i+1};${safeName};${c.type};${c.lat.toFixed(6)};${c.lon.toFixed(6)};${(c.distGeo/1000).toFixed(3)};${c.walk_min.toFixed(2)};${c.score};${safeBonus};${camCount};${disc.toFixed(1)}\n`;
+  });
+  const stamp = new Date().toISOString().replace(/[:T]/g,'-').slice(0,19);
+  downloadBlob(new Blob([csv],{type:'text/csv;charset=utf-8'}), `deploiement_${stamp}.csv`);
+}
+
+function exportGPX() {
+  if(!D.selected.length) return;
+  let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Deploiement+">\n`;
+  gpx += `<wpt lat="${D.center.lat}" lon="${D.center.lon}"><name>Centre</name></wpt>\n`;
+  D.selected.forEach((c,i)=>{
+    gpx += `<wpt lat="${c.lat}" lon="${c.lon}"><name>${i+1}. ${(c.name||'').replace(/[<&>]/g,'_')}</name><desc>${c.walk_min.toFixed(1)} min · ${c.score}/10</desc></wpt>\n`;
+  });
+  gpx += `</gpx>`;
+  const stamp = new Date().toISOString().replace(/[:T]/g,'-').slice(0,19);
+  downloadBlob(new Blob([gpx],{type:'application/gpx+xml'}), `deploiement_${stamp}.gpx`);
+}
+
+function exportVersion() {
+  if(!D.selected.length) return;
+  const data = {
+    version: '1.1',
+    timestamp: new Date().toISOString(),
+    center: D.center,
+    N: D.N, T: D.T,
+    selected: D.selected,
+    departures: D.departures.assigned.length ? {
+      config: D.departures.config,
+      assigned: D.departures.assigned,
+    } : null,
+  };
+  const stamp = new Date().toISOString().replace(/[:T]/g,'-').slice(0,19);
+  downloadBlob(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}), `deploiement_${stamp}.json`);
+}
+
+function importVersion(event) {
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if(!data.center || !data.selected) throw new Error('format invalide');
+      D.center = data.center;
+      D.selected = data.selected;
+      D.N = data.N || data.selected.length;
+      D.T = data.T || 10;
+      document.getElementById('address').value = data.center.display || '';
+      document.getElementById('nPlayers').value = D.N;
+      document.getElementById('nVal').textContent = D.N;
+      document.getElementById('tMinutes').value = D.T;
+      document.getElementById('tVal').textContent = D.T;
+      clearMap();
+      map.setView([D.center.lat,D.center.lon],14);
+      centerMarker = L.marker([D.center.lat,D.center.lon],{icon:L.divIcon({className:'',html:`<div style="background:var(--ink);color:var(--paper);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;border:2px solid var(--white);box-shadow:0 2px 8px rgba(0,0,0,.25);">●</div>`,iconSize:[28,28],iconAnchor:[14,14]})}).addTo(map);
+      drawnLayers.push(centerMarker);
+      renderResults();
+      document.getElementById('btnValidateDeploy').disabled = false;
+      if(data.departures) {
+        D.departures.config = {...D.departures.config, ...data.departures.config};
+        D.departures.assigned = data.departures.assigned;
+      }
+      setStatus(`✓ Version chargée (${D.selected.length} positions)`,'ok');
+    } catch(err) {
+      showModal('Erreur de chargement', 'Le fichier n\'est pas une version valide : ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// PNG EXPORT
+function loadImageCORS(url) {
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = ()=>resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+function getBestZoom(bounds, w, h) {
+  const wPx = w, hPx = h;
+  const WORLD = 256;
+  for(let z=18; z>=2; z--) {
+    const scale = Math.pow(2,z);
+    const x1 = (bounds.getWest()+180)/360*WORLD*scale;
+    const x2 = (bounds.getEast()+180)/360*WORLD*scale;
+    const lat1 = bounds.getNorth()*Math.PI/180;
+    const lat2 = bounds.getSouth()*Math.PI/180;
+    const y1 = (1 - Math.log(Math.tan(lat1)+1/Math.cos(lat1))/Math.PI)/2*WORLD*scale;
+    const y2 = (1 - Math.log(Math.tan(lat2)+1/Math.cos(lat2))/Math.PI)/2*WORLD*scale;
+    if(Math.abs(x2-x1)<wPx && Math.abs(y2-y1)<hPx) return z;
+  }
+  return 13;
+}
+
+function roundRect(ctx,x,y,w,h,r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+async function drawMapBackground(ctx, bounds, w, h, z) {
+  const WORLD = 256;
+  const scale = Math.pow(2,z);
+  function lon2x(lon){return (lon+180)/360*WORLD*scale;}
+  function lat2y(lat){const r=lat*Math.PI/180;return (1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*WORLD*scale;}
+  const x1 = lon2x(bounds.getWest()), x2 = lon2x(bounds.getEast());
+  const y1 = lat2y(bounds.getNorth()), y2 = lat2y(bounds.getSouth());
+  const tx1 = Math.floor(x1/256), tx2 = Math.floor(x2/256);
+  const ty1 = Math.floor(y1/256), ty2 = Math.floor(y2/256);
+  const tasks = [];
+  for(let tx=tx1; tx<=tx2; tx++) {
+    for(let ty=ty1; ty<=ty2; ty++) {
+      const url = `https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${tx}/${ty}.png`;
+      tasks.push(loadImageCORS(url).then(img=>({img, tx, ty})).catch(()=>null));
+    }
+  }
+  const tiles = await Promise.all(tasks);
+  const sw = x2-x1, sh = y2-y1;
+  const fx = w/sw, fy = h/sh;
+  tiles.forEach(t=>{
+    if(!t) return;
+    const dx = (t.tx*256 - x1)*fx;
+    const dy = (t.ty*256 - y1)*fy;
+    ctx.drawImage(t.img, dx, dy, 256*fx, 256*fy);
+  });
+  return {lon2x:(lon)=>(lon2x(lon)-x1)*fx, lat2y:(lat)=>(lat2y(lat)-y1)*fy};
+}
+
+function drawLegend(ctx, x, y, items) {
+  ctx.font = '600 12px "Inter Tight", sans-serif';
+  ctx.fillStyle = 'rgba(253,251,245,0.94)';
+  roundRect(ctx, x, y, 200, items.length*22+20, 6); ctx.fill();
+  ctx.strokeStyle = '#d9d2bd'; ctx.lineWidth=1; ctx.stroke();
+  items.forEach((it,i)=>{
+    ctx.fillStyle = it.color;
+    roundRect(ctx, x+10, y+12+i*22, 18, 16, 3); ctx.fill();
+    ctx.fillStyle = '#fdfbf5';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font = '600 10px "JetBrains Mono", monospace';
+    ctx.fillText(it.label, x+19, y+20+i*22);
+    ctx.fillStyle = '#1a1d1a';
+    ctx.textAlign='left';
+    ctx.font = '500 11px "Inter Tight", sans-serif';
+    ctx.fillText(it.text, x+34, y+20+i*22);
+  });
+}
+
+async function exportMapPNG() {
+  if(!D.selected.length) return;
+  setStatus('Génération PNG…','running');
+  const W = 1600, H = 1200;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#f5f1e8'; ctx.fillRect(0,0,W,H);
+  const all = [[D.center.lat,D.center.lon],...D.selected.map(s=>[s.lat,s.lon])];
+  const bounds = L.latLngBounds(all).pad(0.15);
+  const z = getBestZoom(bounds, W-100, H-200);
+  try {
+    const proj = await drawMapBackground(ctx, bounds, W-80, H-180, z);
+    ctx.translate(40,40);
+    // Center
+    const cx = proj.lon2x(D.center.lon), cy = proj.lat2y(D.center.lat);
+    ctx.fillStyle = '#1a1d1a';
+    ctx.beginPath(); ctx.arc(cx,cy,10,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#fdfbf5'; ctx.lineWidth=2; ctx.stroke();
+    // Lines
+    D.selected.forEach((c,i)=>{
+      const color = COLORS[i%COLORS.length];
+      const x = proj.lon2x(c.lon), y = proj.lat2y(c.lat);
+      ctx.strokeStyle = color; ctx.lineWidth=2.5; ctx.setLineDash([4,6]);
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(x,y); ctx.stroke();
+      ctx.setLineDash([]);
+    });
+    // Markers
+    D.selected.forEach((c,i)=>{
+      const color = COLORS[i%COLORS.length];
+      const x = proj.lon2x(c.lon), y = proj.lat2y(c.lat);
+      roundRect(ctx, x-16, y-16, 32, 32, 6);
+      ctx.fillStyle = color; ctx.fill();
+      ctx.strokeStyle = '#fdfbf5'; ctx.lineWidth=2.5; ctx.stroke();
+      ctx.fillStyle = '#fdfbf5';
+      ctx.font = '600 14px "JetBrains Mono", monospace';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(i+1, x, y);
+    });
+    ctx.translate(-40,-40);
+    // Title
+    ctx.fillStyle = '#1a1d1a';
+    ctx.font = '600 22px "Fraunces", serif';
+    ctx.fillText('Déploiement+', 40, 28);
+    ctx.font = '500 12px "JetBrains Mono", monospace';
+    ctx.fillStyle = '#6b6f68';
+    ctx.fillText(new Date().toLocaleString('fr-FR'), 40, H-20);
+    // Legend
+    const items = D.selected.slice(0,12).map((c,i)=>({color:COLORS[i%COLORS.length], label:String(i+1), text:`${c.name.substring(0,20)}`}));
+    drawLegend(ctx, W-220, 60, items);
+  } catch(e) {
+    console.warn('Map background failed:', e.message);
+  }
+  canvas.toBlob(blob=>{
+    const stamp = new Date().toISOString().replace(/[:T]/g,'-').slice(0,19);
+    downloadBlob(blob, `deploiement_${stamp}.png`);
+    setStatus('✓ PNG exporté','ok');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// ONGLETS — Switching et validation
+// ═══════════════════════════════════════════════════════════
+function switchTab(tabId) {
+  if (tabId === 'departures' && !D.tabs.deploymentValidated) {
+    uiLog('switchTab(departures) ignoré — déploiement non validé', 'warn');
+    return;
+  }
+
+  D.tabs.current = tabId;
+
+  document.getElementById('tabBtnDeploy').classList.toggle('active', tabId === 'deploy');
+  document.getElementById('tabBtnDepartures').classList.toggle('active', tabId === 'departures');
+
+  document.getElementById('tabContentDeploy').classList.toggle('active', tabId === 'deploy');
+  document.getElementById('tabContentDepartures').classList.toggle('active', tabId === 'departures');
+
+  setTimeout(() => map.invalidateSize(), 50);
+  uiLog(`📑 Onglet → ${tabId}`);
+}
+
+function validateDeployments() {
+  if (!D.selected.length) {
+    showModal('Aucun déploiement', 'Lance d\'abord un déploiement avant de passer aux départs.');
+    return;
+  }
+
+  D.tabs.deploymentValidated = true;
+  document.getElementById('tabBtnDepartures').disabled = false;
+
+  // Init datetime à now+1h arrondi heure pleine si pas déjà set
+  const dtInput = document.getElementById('depDateTime');
+  if (!dtInput.value) {
+    const d = new Date();
+    d.setHours(d.getHours() + 1, 0, 0, 0);
+    const tz = d.getTimezoneOffset() * 60000;
+    const localISO = new Date(d.getTime() - tz).toISOString().slice(0, 16);
+    dtInput.value = localISO;
+  }
+
+  D.departures.isStale = false;
+  document.getElementById('staleBanner').style.display = 'none';
+  document.getElementById('tabBtnDepartures').classList.remove('stale');
+
+  switchTab('departures');
+}
+
+function markDeparturesStale() {
+  if (!D.tabs.deploymentValidated) return;
+  D.departures.isStale = true;
+  document.getElementById('staleBanner').style.display = 'flex';
+  document.getElementById('tabBtnDepartures').classList.add('stale');
+  uiLog('⚠ Onglet Départs marqué comme obsolète', 'warn');
+}
+
+// ═══════════════════════════════════════════════════════════
+// MODES DE TRANSPORT (UI)
+// ═══════════════════════════════════════════════════════════
+const TRANSPORT_MODES = [
+  { id: 'subway',    label: 'Métro / RER', icon: '🚇', otp: 'SUBWAY,RAIL' },
+  { id: 'tram',      label: 'Tram',         icon: '🚃', otp: 'TRAM' },
+  { id: 'bus',       label: 'Bus',          icon: '🚌', otp: 'BUS' },
+  { id: 'rail',      label: 'Train',        icon: '🚆', otp: 'RAIL' },
+  { id: 'walk_only', label: 'Marche seule', icon: '🚶', otp: '' },
+];
+
+function buildModeGrid() {
+  const grid = document.getElementById('modeGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  TRANSPORT_MODES.forEach(m => {
+    const isActive = D.departures.config.modes.includes(m.id) || (m.id === 'walk_only' && D.departures.config.walkOnly);
+    const div = document.createElement('div');
+    div.className = 'mode-toggle' + (isActive ? ' active' : '');
+    div.dataset.id = m.id;
+    div.innerHTML = `
+      <span class="mt-icon">${m.icon}</span>
+      <span>${m.label}</span>
+      <span class="mt-check">${isActive ? '✓' : ''}</span>`;
+    div.onclick = () => toggleMode(m.id);
+    grid.appendChild(div);
+  });
+}
+
+function toggleMode(modeId) {
+  const cfg = D.departures.config;
+  if (modeId === 'walk_only') {
+    cfg.walkOnly = !cfg.walkOnly;
+    if (cfg.walkOnly) cfg.modes = []; // marche seule désactive les autres
+    else if (cfg.modes.length === 0) cfg.modes = ['subway', 'bus'];
+  } else {
+    cfg.walkOnly = false;
+    const idx = cfg.modes.indexOf(modeId);
+    if (idx > -1) cfg.modes.splice(idx, 1);
+    else cfg.modes.push(modeId);
+  }
+  buildModeGrid();
+  if (D.tabs.deploymentValidated && D.departures.assigned.length) markDeparturesStale();
+}
+
+// ═══════════════════════════════════════════════════════════
+// STRATÉGIE
+// ═══════════════════════════════════════════════════════════
+const STRATEGY_HINTS = {
+  min_stddev: "Minimise l'écart-type des temps de trajet — tout le monde arrive en même temps.",
+  equal_time: "Vise une durée égale à la cible exacte pour chaque joueur.",
+  spread:     "Maximise la dispersion géographique des points de départ (recuit simulé).",
+};
+
+function setDepStrategy(strat) {
+  D.departures.config.strategy = strat;
+  ['min_stddev', 'equal_time', 'spread'].forEach(s => {
+    const btnSuffix = s === 'min_stddev' ? 'stddev' : (s === 'equal_time' ? 'equal' : 'spread');
+    document.getElementById('depStrat-' + btnSuffix)?.classList.toggle('active', s === strat);
+  });
+  document.getElementById('depStratHint').textContent = STRATEGY_HINTS[strat] || '';
+}
+
+// ═══════════════════════════════════════════════════════════
+// PROGRESS STEPPER (départs)
+// ═══════════════════════════════════════════════════════════
+const DEP_STEPS_DEF = [
+  { id: 'tc_data',    label: 'Chargement données TC' },
+  { id: 'candidates', label: 'Génération candidats départ' },
+  { id: 'routing',    label: 'Calcul itinéraires TC' },
+  { id: 'optimize',   label: 'Optimisation des affectations' },
+  { id: 'render',     label: 'Rendu carte & résultats' },
+];
+
+function showDepStepper() {
+  const stepper = document.getElementById('depProgressStepper');
+  stepper.classList.add('visible');
+  document.getElementById('depStepperContent').innerHTML = DEP_STEPS_DEF.map(s =>
+    `<div class="step-item pending" id="depstep-${s.id}">
+       <div class="step-dot" id="depstepdot-${s.id}">·</div>
+       <span>${s.label}</span>
+     </div>
+     <div class="step-detail" id="depstepdetail-${s.id}"></div>`
+  ).join('');
+}
+
+function setDepStep(id, status, detail = '') {
+  const el  = document.getElementById('depstep-' + id);
+  const dot = document.getElementById('depstepdot-' + id);
+  const det = document.getElementById('depstepdetail-' + id);
+  if (!el) return;
+  el.className = 'step-item ' + (status === 'skip' ? 'done' : status);
+  if (status === 'done' || status === 'skip') dot.textContent = '✓';
+  else if (status === 'error') dot.textContent = '✕';
+  else dot.textContent = '·';
+  if (det && detail) det.textContent = detail;
+}
+
+// ═══════════════════════════════════════════════════════════
+// POLYLINE GOOGLE (precision 5, utilisé par OTP)
+// ═══════════════════════════════════════════════════════════
+function decodeGooglePolyline(encoded, precision = 5) {
+  const factor = Math.pow(10, precision);
+  let index = 0, lat = 0, lng = 0;
+  const coordinates = [];
+  while (index < encoded.length) {
+    let shift = 0, result = 0, byte;
+    do { byte = encoded.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+    lat += ((result & 1) ? ~(result >> 1) : (result >> 1));
+    shift = 0; result = 0;
+    do { byte = encoded.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+    lng += ((result & 1) ? ~(result >> 1) : (result >> 1));
+    coordinates.push([lat / factor, lng / factor]);
+  }
+  return coordinates;
+}
+
+// ═══════════════════════════════════════════════════════════
+// TRANSITOUS OTP2 — Routage TC
+// ═══════════════════════════════════════════════════════════
+const TRANSITOUS_BASE = 'https://api.transitous.org';
+
+// Vitesses moyennes pour estimation fallback (km/h) + temps d'attente moyens
+const FALLBACK_SPEEDS = {
+  subway: { speed: 30, wait: 180 },
+  rail:   { speed: 60, wait: 300 },
+  tram:   { speed: 18, wait: 240 },
+  bus:    { speed: 15, wait: 480 },
+};
+
+function buildTransitModesParam(modes) {
+  if (!modes.length) return '';
+  const parts = [];
+  modes.forEach(m => {
+    if (m === 'subway') parts.push('SUBWAY');
+    else if (m === 'tram') parts.push('TRAM');
+    else if (m === 'bus') parts.push('BUS');
+    else if (m === 'rail') parts.push('RAIL');
+  });
+  return parts.join(',');
+}
+
+async function planTransitRoute(from, to, modes, dateTime) {
+  const cacheKey = `${from.lat.toFixed(5)},${from.lon.toFixed(5)}->${to.lat.toFixed(5)},${to.lon.toFixed(5)}|${modes.join(',')}|${dateTime}`;
+  if (D.cache.transit.has(cacheKey)) return D.cache.transit.get(cacheKey);
+
+  const transitModes = buildTransitModesParam(modes);
+  const dt = new Date(dateTime);
+  const dateStr = `${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}-${dt.getFullYear()}`;
+  const timeStr = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+
+  const params = new URLSearchParams({
+    fromPlace: `${from.lat},${from.lon}`,
+    toPlace: `${to.lat},${to.lon}`,
+    date: dateStr,
+    time: timeStr,
+    mode: 'TRANSIT,WALK',
+    maxWalkDistance: String(D.departures.config.maxWalkM),
+    numItineraries: '1',
+    walkSpeed: '1.34',
+    arriveBy: 'false',
+  });
+  if (transitModes) params.set('transitModes', transitModes);
+
+  const url = `${TRANSITOUS_BASE}/otp/routers/default/plan?${params.toString()}`;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (!r.ok) {
+        if (attempt === 1) throw new Error(`HTTP ${r.status}`);
+        await new Promise(res => setTimeout(res, 800));
+        continue;
+      }
+      const data = await r.json();
+      if (data.error || !data.plan || !data.plan.itineraries || !data.plan.itineraries.length) {
+        D.cache.transit.set(cacheKey, null);
+        return null;
+      }
+      const it = data.plan.itineraries[0];
+      const result = {
+        duration: it.duration,
+        walkTime: it.walkTime,
+        transitTime: it.transitTime,
+        transfers: it.transfers || 0,
+        walkDistance: it.walkDistance,
+        startTime: it.startTime,
+        endTime: it.endTime,
+        legs: (it.legs || []).map(l => ({
+          mode: (l.mode || '').toLowerCase(),
+          route: l.route || l.routeShortName || '',
+          duration: l.duration,
+          distance: l.distance,
+          from: l.from,
+          to: l.to,
+          legGeometry: l.legGeometry,
+          startTime: l.startTime,
+          endTime: l.endTime,
+        })),
+        source: 'transitous',
+      };
+      D.cache.transit.set(cacheKey, result);
+      return result;
+    } catch (e) {
+      if (attempt === 1) {
+        uiLog(`Transitous error: ${e.message}`, 'warn');
+        D.cache.transit.set(cacheKey, null);
+        return null;
+      }
+      await new Promise(res => setTimeout(res, 800));
+    }
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════
+// FALLBACK : stations Overpass + estimation durée
+// ═══════════════════════════════════════════════════════════
+async function fetchTransitStations(bbox, modes) {
+  const queries = [];
+  if (modes.includes('subway') || modes.includes('rail')) {
+    queries.push(`node["railway"="station"](${bbox});`);
+    queries.push(`node["railway"="subway_entrance"](${bbox});`);
+    queries.push(`node["public_transport"="station"](${bbox});`);
+  }
+  if (modes.includes('tram')) {
+    queries.push(`node["railway"="tram_stop"](${bbox});`);
+  }
+  if (modes.includes('bus')) {
+    queries.push(`node["highway"="bus_stop"](${bbox});`);
+  }
+  if (!queries.length) return [];
+
+  const query = `[out:json][timeout:25];\n(\n  ${queries.join('\n  ')}\n);\nout center tags;`;
+
+  const servers = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+  for (let i = 0; i < servers.length * 2; i++) {
+    try {
+      const r = await fetch(servers[i % servers.length], {
+        method: 'POST',
+        body: 'data=' + encodeURIComponent(query),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      });
+      if (r.ok) {
+        const d = await r.json();
+        return (d.elements || []).map(e => {
+          const lat = e.lat || e.center?.lat;
+          const lon = e.lon || e.center?.lon;
+          const tags = e.tags || {};
+          let mode = 'bus';
+          if (tags.railway === 'station' || tags.railway === 'subway_entrance') mode = 'subway';
+          else if (tags.railway === 'tram_stop') mode = 'tram';
+          else if (tags.railway === 'halt') mode = 'rail';
+          else if (tags.public_transport === 'station') mode = tags.station || 'subway';
+          return { lat, lon, name: tags.name || 'Station', mode, tags };
+        }).filter(s => s.lat && s.lon);
+      }
+      await new Promise(res => setTimeout(res, Math.min(1000 * Math.pow(2, i), 8000)));
+    } catch (e) {
+      await new Promise(res => setTimeout(res, 1500));
+    }
+  }
+  return [];
+}
+
+function estimateFallbackDuration(from, to, mode) {
+  const distM = haversine(from, to);
+  const fb = FALLBACK_SPEEDS[mode] || FALLBACK_SPEEDS.bus;
+  const transitSec = (distM * 1.2) / (fb.speed * 1000 / 3600); // détour 1.2x
+  return transitSec + fb.wait;
+}
+
+// ═══════════════════════════════════════════════════════════
+// GÉNÉRATION DES CANDIDATS DÉPART
+// ═══════════════════════════════════════════════════════════
+async function generateDepartureCandidates(deploymentPoint, deploymentIdx, config, allStations) {
+  const candidates = [];
+  const targetSec = config.targetMinutes * 60;
+  const tolSec = config.toleranceMinutes * 60;
+  const minSec = targetSec - tolSec;
+  const maxSec = targetSec + tolSec;
+
+  // Mode marche seule : pas de TC, on utilise les lieux du déploiement comme candidats potentiels (alternatives du même secteur)
+  if (config.walkOnly) {
+    const altPool = D.geoFiltered || [];
+    // Filtre par distance approximative : à durée cible × vitesse de marche
+    const speedMs = getSpeedKmh() * 1000 / 3600;
+    const targetDistM = targetSec * speedMs;
+    const candidatesNearby = altPool.filter(p => {
+      const d = haversine(deploymentPoint, p);
+      return d > targetDistM * 0.5 && d < targetDistM * 1.5;
+    });
+    // Calcul réel pour les meilleurs
+    const sorted = candidatesNearby.sort((a, b) => {
+      const da = haversine(deploymentPoint, a), db = haversine(deploymentPoint, b);
+      return Math.abs(da - targetDistM) - Math.abs(db - targetDistM);
+    }).slice(0, 30);
+    for (const p of sorted) {
+      const sec = await calculateSingleWalkTime(p, deploymentPoint);
+      if (sec == null) continue;
+      if (sec < minSec || sec > maxSec) continue;
+      candidates.push({
+        station: { lat: p.lat, lon: p.lon, name: p.name || 'Position', mode: 'walk' },
+        deploymentIdx,
+        deploymentPoint,
+        duration_sec: sec,
+        walk_distance_m: haversine(p, deploymentPoint),
+        transfers: 0,
+        modes_used: ['walk'],
+        itinerary: null,
+        source: 'walk_only',
+      });
+    }
+    return candidates;
+  }
+
+  // Mode TC : on prend les K stations les plus proches "raisonnables" et on plan
+  const speedTransit = 25; // estimation km/h moyen pour pré-filtrage
+  const targetDistM = (targetSec / 3600) * speedTransit * 1000;
+  const candidateStations = allStations
+    .map(s => ({ ...s, distFromDep: haversine(s, deploymentPoint) }))
+    .filter(s => s.distFromDep > 500 && s.distFromDep < targetDistM * 1.8)
+    .sort((a, b) => Math.abs(a.distFromDep - targetDistM) - Math.abs(b.distFromDep - targetDistM))
+    .slice(0, 15);
+
+  const dt = document.getElementById('depDateTime').value;
+
+  for (const station of candidateStations) {
+    if (config.maxTransfers != null && config.maxTransfers >= 0) {
+      // Plan via Transitous
+      const plan = await planTransitRoute(station, deploymentPoint, config.modes, dt);
+      if (plan && plan.transfers <= config.maxTransfers && plan.duration >= minSec && plan.duration <= maxSec) {
+        candidates.push({
+          station: { lat: station.lat, lon: station.lon, name: station.name, mode: station.mode },
+          deploymentIdx,
+          deploymentPoint,
+          duration_sec: plan.duration,
+          walk_distance_m: plan.walkDistance || 0,
+          transfers: plan.transfers,
+          modes_used: [...new Set(plan.legs.filter(l => l.mode !== 'walk').map(l => l.mode))],
+          itinerary: plan,
+          source: 'transitous',
+        });
+      } else if (!plan) {
+        // Fallback estimation
+        const estSec = estimateFallbackDuration(station, deploymentPoint, station.mode);
+        if (estSec >= minSec && estSec <= maxSec) {
+          candidates.push({
+            station: { lat: station.lat, lon: station.lon, name: station.name, mode: station.mode },
+            deploymentIdx,
+            deploymentPoint,
+            duration_sec: estSec,
+            walk_distance_m: 0,
+            transfers: 0,
+            modes_used: [station.mode],
+            itinerary: null,
+            source: 'estimate',
+          });
+        }
+      }
+    }
+  }
+
+  return candidates;
+}
+
+// ═══════════════════════════════════════════════════════════
+// MATRICE DE COÛTS + ALGORITHME HONGROIS
+// ═══════════════════════════════════════════════════════════
+function buildCostMatrix(candidatesPerPoint, strategy, targetSec) {
+  // Aplatit en pool global, on retient pour chaque candidate (deploymentIdx, candidateIdx)
+  // Crée une matrice carrée N x M où M = nombre total de candidats
+  const N = candidatesPerPoint.length;
+  const flat = [];
+  candidatesPerPoint.forEach((arr, depIdx) => {
+    arr.forEach((c, cIdx) => flat.push({ ...c, _depIdx: depIdx, _cIdx: cIdx, _flatIdx: flat.length }));
+  });
+  const M = flat.length;
+  if (M === 0) return { matrix: [], flat: [], N, M: 0 };
+
+  // Cost very high if candidate is for a different deployment point
+  const BIG = 1e9;
+  const matrix = [];
+  for (let i = 0; i < N; i++) {
+    matrix[i] = [];
+    for (let j = 0; j < M; j++) {
+      if (flat[j]._depIdx !== i) {
+        matrix[i][j] = BIG;
+        continue;
+      }
+      const c = flat[j];
+      const dt = c.duration_sec - targetSec;
+      let cost;
+      if (strategy === 'equal_time') {
+        cost = dt * dt; // pénalité quadratique pour s'éloigner de la cible
+      } else if (strategy === 'min_stddev') {
+        cost = dt * dt + Math.abs(dt) * 50;
+      } else if (strategy === 'spread') {
+        cost = dt * dt;
+      } else {
+        cost = dt * dt;
+      }
+      // Pénalité correspondances
+      cost += c.transfers * 800;
+      // Pénalité marche (favoriser moins de marche)
+      cost += (c.walk_distance_m || 0) * 0.3;
+      matrix[i][j] = cost;
+    }
+  }
+
+  return { matrix, flat, N, M };
+}
+
+// Algorithme hongrois (Munkres) pour matrice rectangulaire N x M (M >= N)
+// Retourne array de longueur N : assignment[i] = j (colonne assignée à ligne i)
+function hungarianAssign(costMatrix) {
+  const N = costMatrix.length;
+  if (N === 0) return [];
+  const M = costMatrix[0].length;
+  if (M < N) {
+    // Padding avec colonnes virtuelles très chères
+    const BIG = 1e10;
+    for (let i = 0; i < N; i++) {
+      while (costMatrix[i].length < N) costMatrix[i].push(BIG);
+    }
+  }
+
+  // Pad matrix to square if needed
+  const size = Math.max(N, M);
+  const cost = [];
+  for (let i = 0; i < size; i++) {
+    cost[i] = [];
+    for (let j = 0; j < size; j++) {
+      cost[i][j] = (i < N && j < M) ? costMatrix[i][j] : 1e10;
+    }
+  }
+
+  // Implémentation Munkres O(n^3)
+  const u = new Array(size + 1).fill(0);
+  const v = new Array(size + 1).fill(0);
+  const p = new Array(size + 1).fill(0);
+  const way = new Array(size + 1).fill(0);
+  const INF = 1e15;
+
+  for (let i = 1; i <= size; i++) {
+    p[0] = i;
+    let j0 = 0;
+    const minv = new Array(size + 1).fill(INF);
+    const used = new Array(size + 1).fill(false);
+    do {
+      used[j0] = true;
+      const i0 = p[j0];
+      let delta = INF;
+      let j1 = -1;
+      for (let j = 1; j <= size; j++) {
+        if (!used[j]) {
+          const cur = cost[i0 - 1][j - 1] - u[i0] - v[j];
+          if (cur < minv[j]) {
+            minv[j] = cur;
+            way[j] = j0;
+          }
+          if (minv[j] < delta) {
+            delta = minv[j];
+            j1 = j;
+          }
+        }
+      }
+      for (let j = 0; j <= size; j++) {
+        if (used[j]) {
+          u[p[j]] += delta;
+          v[j] -= delta;
+        } else {
+          minv[j] -= delta;
+        }
+      }
+      j0 = j1;
+    } while (p[j0] !== 0);
+    do {
+      const j1 = way[j0];
+      p[j0] = p[j1];
+      j0 = j1;
+    } while (j0);
+  }
+
+  const assignment = new Array(N).fill(-1);
+  for (let j = 1; j <= size; j++) {
+    const i = p[j] - 1;
+    if (i < N && j - 1 < M) assignment[i] = j - 1;
+  }
+  return assignment;
+}
+
+function computeStdDev(values) {
+  if (!values.length) return 0;
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance = values.reduce((s, v) => s + (v - mean) * (v - mean), 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+// Optimisation globale (3 passes pour stabiliser autour de la moyenne)
+function optimizeDepartures(candidatesPerPoint, config) {
+  const N = candidatesPerPoint.length;
+  if (!N) return [];
+
+  let targetSec = config.targetMinutes * 60;
+  let bestAssignment = null;
+  let bestStddev = Infinity;
+  let bestCost = Infinity;
+
+  for (let pass = 0; pass < 3; pass++) {
+    const { matrix, flat } = buildCostMatrix(candidatesPerPoint, config.strategy, targetSec);
+    if (!flat.length) return [];
+
+    const assignmentIdx = hungarianAssign(matrix);
+    const assigned = assignmentIdx.map((j, i) => j >= 0 ? flat[j] : null);
+
+    const validDurations = assigned.filter(a => a).map(a => a.duration_sec);
+    const stddev = computeStdDev(validDurations);
+    const totalCost = assignmentIdx.reduce((s, j, i) => s + (j >= 0 ? matrix[i][j] : 1e9), 0);
+
+    if (stddev < bestStddev || totalCost < bestCost) {
+      bestStddev = stddev;
+      bestCost = totalCost;
+      bestAssignment = assigned;
+    }
+
+    // Update target = moyenne actuelle
+    if (validDurations.length) {
+      targetSec = validDurations.reduce((a, b) => a + b, 0) / validDurations.length;
+    }
+  }
+
+  return bestAssignment || [];
+}
+
+// ═══════════════════════════════════════════════════════════
+// CONTRAINTES POST-OPTIMISATION (espacement, max/station)
+// ═══════════════════════════════════════════════════════════
+function enforceConstraints(assignment, candidatesPerPoint, config) {
+  const out = [...assignment];
+  const minSpacing = config.minSpacingM;
+  const maxPerStation = config.maxPerStation;
+
+  // Compter par station (clé lat/lon arrondie)
+  const stationKey = (s) => s ? `${s.station.lat.toFixed(5)},${s.station.lon.toFixed(5)}` : null;
+  const stationCount = new Map();
+  out.forEach(a => {
+    if (!a) return;
+    const k = stationKey(a);
+    stationCount.set(k, (stationCount.get(k) || 0) + 1);
+  });
+
+  // Si une station dépasse maxPerStation, on essaie de reloger les surnuméraires
+  for (let i = 0; i < out.length; i++) {
+    if (!out[i]) continue;
+    const k = stationKey(out[i]);
+    if (stationCount.get(k) > maxPerStation) {
+      // Trouve un candidat alternatif pour le déploiement i
+      const alts = candidatesPerPoint[i] || [];
+      for (const alt of alts) {
+        const altKey = `${alt.station.lat.toFixed(5)},${alt.station.lon.toFixed(5)}`;
+        if (altKey === k) continue;
+        if ((stationCount.get(altKey) || 0) >= maxPerStation) continue;
+        // Vérif spacing
+        let ok = true;
+        if (minSpacing > 0) {
+          for (let j = 0; j < out.length; j++) {
+            if (j === i || !out[j]) continue;
+            if (haversine(alt.station, out[j].station) < minSpacing) { ok = false; break; }
+          }
+        }
+        if (ok) {
+          stationCount.set(k, stationCount.get(k) - 1);
+          stationCount.set(altKey, (stationCount.get(altKey) || 0) + 1);
+          out[i] = alt;
+          break;
+        }
+      }
+    }
+  }
+
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════
+// runDepartures — orchestration principale
+// ═══════════════════════════════════════════════════════════
+async function runDepartures() {
+  if (!D.selected.length) {
+    showModal('Aucun déploiement', 'Lance d\'abord un déploiement avant de calculer les départs.');
+    return;
+  }
+
+  // Sync config from UI
+  const cfg = D.departures.config;
+  cfg.targetMinutes    = parseInt(document.getElementById('depTargetMin').value);
+  cfg.toleranceMinutes = parseInt(document.getElementById('depToleranceMin').value);
+  cfg.maxWalkM         = parseInt(document.getElementById('depMaxWalk').value);
+  cfg.minSpacingM      = parseInt(document.getElementById('depMinSpacing').value);
+  cfg.maxPerStation    = parseInt(document.getElementById('depMaxPerStation').value);
+  cfg.maxTransfers     = parseInt(document.getElementById('depMaxTransfers').value);
+
+  if (!cfg.walkOnly && cfg.modes.length === 0) {
+    showModal('Aucun mode sélectionné', 'Sélectionne au moins un mode de transport, ou active "Marche seule".');
+    return;
+  }
+
+  const dt = document.getElementById('depDateTime').value;
+  if (!dt) {
+    showModal('Date/heure manquante', 'Renseigne une heure de départ pour interroger les horaires GTFS.');
+    return;
+  }
+
+  const btn = document.getElementById('btnRunDepartures');
+  btn.disabled = true;
+  document.getElementById('depResultsList').innerHTML = '';
+  document.getElementById('depStatsSection').style.display = 'none';
+  showDepStepper();
+  closeModal();
+
+  // Clear existing departure layers
+  if (D.departures.itineraryLayer) {
+    map.removeLayer(D.departures.itineraryLayer);
+    D.departures.itineraryLayer = null;
+  }
+  D.departures.startMarkers.forEach(m => map.removeLayer(m));
+  D.departures.startMarkers = [];
+
+  uiLog(`▶ runDepartures(): ${D.selected.length} pts · modes=${cfg.walkOnly ? 'walk_only' : cfg.modes.join(',')} · cible=${cfg.targetMinutes}±${cfg.toleranceMinutes}min`);
+
+  // ───── ÉTAPE 1 : Données TC (stations) ─────
+  setDepStep('tc_data', 'running');
+  setDepStatus('Chargement des données TC…', 'running');
+
+  let allStations = [];
+  if (!cfg.walkOnly) {
+    // Bbox élargie autour des déploiements
+    const lats = D.selected.map(s => s.lat);
+    const lons = D.selected.map(s => s.lon);
+    const speedKmh = 25; // approx vitesse moyenne TC
+    const radiusM = (cfg.targetMinutes / 60) * speedKmh * 1000 * 1.6;
+    const dLat = radiusM / 111320;
+    const dLon = radiusM / (111320 * Math.cos((Math.min(...lats) + Math.max(...lats)) / 2 * Math.PI / 180));
+    const bbox = `${Math.min(...lats) - dLat},${Math.min(...lons) - dLon},${Math.max(...lats) + dLat},${Math.max(...lons) + dLon}`;
+
+    try {
+      allStations = await fetchTransitStations(bbox, cfg.modes);
+      D.departures.transitStations = allStations;
+      setDepStep('tc_data', 'done', `${allStations.length} stations dans la zone`);
+      uiLog(`✓ ${allStations.length} stations chargées (Overpass)`, 'ok');
+    } catch (e) {
+      setDepStep('tc_data', 'error', e.message);
+      uiLog(`Erreur stations: ${e.message}`, 'error');
+      showModal('Données TC indisponibles', 'Overpass n\'a pas pu être joint. Réessaie dans quelques secondes.');
+      btn.disabled = false;
+      return;
+    }
+  } else {
+    setDepStep('tc_data', 'skip', 'mode marche seule');
+  }
+
+  // ───── ÉTAPE 2 : Génération candidats ─────
+  setDepStep('candidates', 'running');
+  setDepStatus('Génération des candidats départ…', 'running');
+
+  const candidatesPerPoint = [];
+  for (let i = 0; i < D.selected.length; i++) {
+    const dep = D.selected[i];
+    setDepStatus(`Candidats joueur ${i + 1}/${D.selected.length}…`, 'running');
+    const cands = await generateDepartureCandidates(dep, i, cfg, allStations);
+    candidatesPerPoint.push(cands);
+    uiLog(`  pt${i + 1}: ${cands.length} candidats`);
+  }
+
+  const totalCands = candidatesPerPoint.reduce((s, a) => s + a.length, 0);
+  setDepStep('candidates', 'done', `${totalCands} candidats au total`);
+
+  if (candidatesPerPoint.some(arr => arr.length === 0)) {
+    const missing = candidatesPerPoint.map((arr, i) => arr.length === 0 ? i + 1 : null).filter(x => x);
+    setDepStep('routing', 'error');
+    showModal(
+      'Pas de candidats trouvés',
+      `Aucun point de départ TC trouvé pour le(s) joueur(s) ${missing.join(', ')} dans la fenêtre [${cfg.targetMinutes - cfg.toleranceMinutes}..${cfg.targetMinutes + cfg.toleranceMinutes}] min.\n\nEssaie : élargir la tolérance, augmenter la marche max, ou ajouter des modes.`
+    );
+    btn.disabled = false;
+    return;
+  }
+
+  // ───── ÉTAPE 3 : Routing (déjà fait dans l'étape 2 via planTransitRoute) ─────
+  setDepStep('routing', 'done', `${totalCands} itinéraires calculés`);
+
+  // ───── ÉTAPE 4 : Optimisation ─────
+  setDepStep('optimize', 'running');
+  setDepStatus('Optimisation des affectations…', 'running');
+
+  let assigned = optimizeDepartures(candidatesPerPoint, cfg);
+  assigned = enforceConstraints(assigned, candidatesPerPoint, cfg);
+
+  D.departures.assigned = assigned;
+  D.departures.lastConfig = { ...cfg };
+
+  const validCount = assigned.filter(a => a).length;
+  setDepStep('optimize', 'done', `${validCount}/${D.selected.length} affectations`);
+
+  // ───── ÉTAPE 5 : Rendu ─────
+  setDepStep('render', 'running');
+  renderDepartureResults(assigned);
+  setDepStep('render', 'done');
+
+  document.getElementById('depProgressStepper').classList.remove('visible');
+  setDepStatus(`✓ ${validCount} départs calculés`, 'ok');
+  D.departures.isStale = false;
+  document.getElementById('staleBanner').style.display = 'none';
+  document.getElementById('tabBtnDepartures').classList.remove('stale');
+
+  btn.disabled = false;
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER départs (carte + liste)
+// ═══════════════════════════════════════════════════════════
+function renderDepartureResults(assigned) {
+  const list = document.getElementById('depResultsList');
+  list.innerHTML = '';
+
+  // Création du layer pour les itinéraires
+  const layer = L.layerGroup();
+
+  const validAssigns = assigned.filter(a => a);
+  const durations = validAssigns.map(a => a.duration_sec / 60);
+
+  // Stats globales
+  const mean = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
+  const stddev = computeStdDev(durations);
+  const minD = durations.length ? Math.min(...durations) : 0;
+  const maxD = durations.length ? Math.max(...durations) : 0;
+  const equityScore = mean > 0 ? Math.max(0, 1 - stddev / mean) : 0;
+
+  // Stats panel
+  const statsSection = document.getElementById('depStatsSection');
+  const statsContent = document.getElementById('depStatsContent');
+  statsSection.style.display = 'block';
+  statsContent.innerHTML = `
+    <div class="stat-row"><span>Durée moyenne</span><b>${mean.toFixed(1)} min</b></div>
+    <div class="stat-row"><span>Écart-type</span><b>± ${stddev.toFixed(1)} min</b></div>
+    <div class="stat-row"><span>Min · Max</span><b>${minD.toFixed(1)} – ${maxD.toFixed(1)} min</b></div>
+    <div class="stat-row"><span>Joueurs assignés</span><b>${validAssigns.length} / ${D.selected.length}</b></div>
+    <div class="equity-bar">
+      <div class="equity-label">
+        <span>Équité des trajets</span>
+        <b>${(equityScore * 100).toFixed(0)}%</b>
+      </div>
+      <div class="equity-meter">
+        <div class="equity-meter-fill" style="width:${(equityScore * 100).toFixed(0)}%;"></div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:14px;">
+      <button class="btn-small" onclick="exportDeploymentWithDepartures('csv')">📊 CSV étendu</button>
+      <button class="btn-small" onclick="exportDeploymentWithDepartures('gpx')">📍 GPX étendu</button>
+    </div>`;
+
+  // Rendu carte + liste
+  assigned.forEach((a, i) => {
+    const depColor = COLORS[i % COLORS.length];
+
+    if (!a) {
+      // Pas d'affectation pour ce joueur
+      const item = document.createElement('div');
+      item.className = 'dep-result-item error';
+      item.innerHTML = `
+        <div class="dep-arrow-row">
+          <div class="dep-num-from" style="background:var(--ink-4);">?</div>
+          <div class="dep-arrow-line"><div class="dep-arrow-icons">⚠</div></div>
+          <div class="dep-num-to" style="background:${depColor};">${i + 1}</div>
+        </div>
+        <div class="dep-error-msg">Aucun départ valide trouvé pour ce joueur</div>`;
+      list.appendChild(item);
+      return;
+    }
+
+    // Marker départ (forme carrée bleue transit)
+    const startIcon = L.divIcon({
+      className: '',
+      html: `<div style="background:var(--transit);color:var(--paper);width:28px;height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;border:2px solid var(--white);box-shadow:0 2px 8px rgba(45,111,163,.3);">${i + 1}</div>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
+    });
+    const startMarker = L.marker([a.station.lat, a.station.lon], { icon: startIcon });
+    startMarker.bindPopup(`
+      <div style="font-family:'Inter Tight',sans-serif;min-width:220px;">
+        <div style="font-size:.7rem;color:var(--transit);font-weight:600;margin-bottom:6px;letter-spacing:.05em;">DÉPART JOUEUR ${i + 1}</div>
+        <div style="font-size:.95rem;font-weight:600;color:var(--ink);margin-bottom:6px;font-family:'Fraunces',serif;">${a.station.name}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--ink-3);">
+          ${(a.duration_sec / 60).toFixed(1)} min · ${a.transfers} corresp. · ${a.modes_used.join('+')}
+        </div>
+      </div>`);
+    startMarker.addTo(layer);
+    D.departures.startMarkers.push(startMarker);
+
+    // Render itinéraire
+    renderTransitItinerary(a, depColor, layer);
+
+    // Item liste
+    const item = document.createElement('div');
+    item.className = 'dep-result-item';
+
+    const modeIcons = a.modes_used.map(m => {
+      if (m === 'subway') return '🚇';
+      if (m === 'tram') return '🚃';
+      if (m === 'bus') return '🚌';
+      if (m === 'rail') return '🚆';
+      if (m === 'walk') return '🚶';
+      return '·';
+    }).join('');
+
+    const dt = new Date(a.duration_sec * 1000).toISOString().substr(11, 8);
+    const targetSec = D.departures.config.targetMinutes * 60;
+    const dt_diff = a.duration_sec - targetSec;
+    const dt_diff_str = (dt_diff >= 0 ? '+' : '') + (dt_diff / 60).toFixed(1);
+    const dt_color = Math.abs(dt_diff) < 60 ? 'var(--forest)' : (Math.abs(dt_diff) < 180 ? 'var(--ochre)' : 'var(--rust)');
+
+    let modesChips = '';
+    if (a.modes_used.length) {
+      modesChips = a.modes_used.map(m => {
+        const cl = m === 'walk' ? 'walk' : '';
+        const icon = m === 'subway' ? '🚇' : m === 'tram' ? '🚃' : m === 'bus' ? '🚌' : m === 'rail' ? '🚆' : '🚶';
+        return `<span class="dep-mode-chip ${cl}">${icon} ${m}</span>`;
+      }).join('');
+    }
+
+    const sourceTag = a.source === 'transitous'
+      ? '<span style="color:var(--forest-2);">●</span> GTFS réel'
+      : a.source === 'estimate'
+        ? '<span style="color:var(--ochre);">●</span> estimation'
+        : '<span style="color:var(--ink-3);">●</span> marche';
+
+    item.innerHTML = `
+      <div class="dep-arrow-row">
+        <div class="dep-num-from">${i + 1}</div>
+        <div class="dep-arrow-line"><div class="dep-arrow-icons">${modeIcons}</div></div>
+        <div class="dep-num-to" style="background:${depColor};">${i + 1}</div>
+      </div>
+      <div class="dep-from-name">${a.station.name}</div>
+      <div class="dep-to-name">${(D.selected[i].name || 'Position ' + (i + 1))}</div>
+      <div class="dep-meta">
+        <span class="tdur">${(a.duration_sec / 60).toFixed(1)} min</span>
+        <span style="color:${dt_color};">${dt_diff_str}min</span>
+        <span>·</span>
+        <span>${a.transfers} corresp.</span>
+        ${a.walk_distance_m ? `<span>·</span><span>${Math.round(a.walk_distance_m)}m marche</span>` : ''}
+      </div>
+      <div class="dep-modes-line">${modesChips}</div>
+      <div style="font-family:'JetBrains Mono',monospace; font-size:.6rem; color:var(--ink-4); margin-top:4px;">${sourceTag}</div>
+    `;
+
+    item.onclick = () => {
+      const bounds = L.latLngBounds([
+        [a.station.lat, a.station.lon],
+        [D.selected[i].lat, D.selected[i].lon]
+      ]);
+      map.fitBounds(bounds, { padding: [60, 60] });
+      startMarker.openPopup();
+    };
+
+    list.appendChild(item);
+  });
+
+  layer.addTo(map);
+  D.departures.itineraryLayer = layer;
+
+  // Fit bounds sur l'ensemble (déploiements + départs)
+  const allPoints = [];
+  D.selected.forEach(s => allPoints.push([s.lat, s.lon]));
+  assigned.forEach(a => { if (a) allPoints.push([a.station.lat, a.station.lon]); });
+  if (allPoints.length) {
+    map.fitBounds(L.latLngBounds(allPoints), { padding: [40, 40] });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER ITINÉRAIRE TC (polylignes par segment)
+// ═══════════════════════════════════════════════════════════
+function renderTransitItinerary(assignment, depColor, layer) {
+  const it = assignment.itinerary;
+
+  if (!it || !it.legs || !it.legs.length) {
+    // Pas de geometry : ligne droite
+    const line = L.polyline([
+      [assignment.station.lat, assignment.station.lon],
+      [assignment.deploymentPoint.lat, assignment.deploymentPoint.lon]
+    ], {
+      color: 'var(--transit)',
+      weight: 2.5,
+      opacity: 0.5,
+      dashArray: '8 5',
+    });
+    line.addTo(layer);
+    return;
+  }
+
+  // Couleurs par mode
+  const modeColors = {
+    subway: '#2d6fa3',
+    rail:   '#1a4f7a',
+    tram:   '#4a8fbf',
+    bus:    '#5a9fcf',
+    walk:   '#9a9d96',
+  };
+
+  it.legs.forEach(leg => {
+    if (!leg.legGeometry || !leg.legGeometry.points) return;
+    const coords = decodeGooglePolyline(leg.legGeometry.points, 5);
+    const isWalk = (leg.mode || '').toLowerCase() === 'walk';
+    const color = modeColors[leg.mode?.toLowerCase()] || '#2d6fa3';
+
+    L.polyline(coords, {
+      color: color,
+      weight: isWalk ? 2 : 3.5,
+      opacity: isWalk ? 0.55 : 0.85,
+      dashArray: isWalk ? '4 5' : null,
+    }).addTo(layer);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXPORTS étendus (déploiement + départs)
+// ═══════════════════════════════════════════════════════════
+function exportDeploymentWithDepartures(format) {
+  if (!D.selected.length) return;
+  const assigned = D.departures.assigned;
+  const center = D.center;
+
+  if (format === 'csv') {
+    let csv = 'N;Nom_lieu;Type;Lat_lieu;Lon_lieu;Distance_km;Marche_min;Score;Bonus;Camera_count;Discret_pts;Depart_Nom;Depart_Lat;Depart_Lon;TC_Duree_min;TC_Modes;TC_Correspondances;TC_Marche_m;TC_Source\n';
+    D.selected.forEach((c, i) => {
+      const camCount = countCamerasNear(c.lat, c.lon, getCameraRadius());
+      const camPenalty = -(camCount * getCameraPenaltyPerCam());
+      const disc = computeDiscretionDisplay(c.tags || {}, camPenalty);
+      const safeName  = (c.name || '').replace(/;/g, ',').replace(/\n/g, ' ');
+      const safeBonus = c.bonuses.join('|').replace(/;/g, ',');
+
+      const a = assigned[i];
+      const depPart = a
+        ? `${(a.station.name || '').replace(/;/g, ',')};${a.station.lat.toFixed(6)};${a.station.lon.toFixed(6)};${(a.duration_sec / 60).toFixed(2)};${a.modes_used.join('+')};${a.transfers};${Math.round(a.walk_distance_m || 0)};${a.source}`
+        : `;;;;;;;`;
+
+      csv += `${i + 1};${safeName};${c.type};${c.lat.toFixed(6)};${c.lon.toFixed(6)};${(c.distGeo / 1000).toFixed(3)};${c.walk_min.toFixed(2)};${c.score};${safeBonus};${camCount};${disc.toFixed(1)};${depPart}\n`;
+    });
+    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+    downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `deploiement_departs_${stamp}.csv`);
+  }
+
+  if (format === 'gpx') {
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Deploiement+">\n`;
+    gpx += `<wpt lat="${center.lat}" lon="${center.lon}"><name>Centre</name></wpt>\n`;
+    D.selected.forEach((c, i) => {
+      gpx += `<wpt lat="${c.lat}" lon="${c.lon}"><name>${i + 1}. ${(c.name || '').replace(/[<&>]/g, '_')}</name><desc>Déploiement · ${c.walk_min.toFixed(1)} min · ${c.score}/10</desc></wpt>\n`;
+    });
+    assigned.forEach((a, i) => {
+      if (!a) return;
+      gpx += `<wpt lat="${a.station.lat}" lon="${a.station.lon}"><name>D${i + 1}. ${(a.station.name || '').replace(/[<&>]/g, '_')}</name><desc>Départ TC · ${(a.duration_sec / 60).toFixed(1)} min · ${a.modes_used.join('+')}</desc></wpt>\n`;
+    });
+    gpx += `</gpx>`;
+    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+    downloadBlob(new Blob([gpx], { type: 'application/gpx+xml' }), `deploiement_departs_${stamp}.gpx`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// LISTENERS pour invalider l'onglet Départs lors de changements config
+// ═══════════════════════════════════════════════════════════
+['depTargetMin', 'depToleranceMin', 'depMaxWalk', 'depMinSpacing', 'depMaxPerStation', 'depMaxTransfers', 'depDateTime'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('change', () => {
+      if (D.departures.assigned.length) markDeparturesStale();
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// INITIALISATION AU LOAD
+// ═══════════════════════════════════════════════════════════
+window.addEventListener('load', () => {
+  // Modes
+  buildModeGrid();
+
+  // Datetime par défaut (now + 1h, arrondi heure pleine)
+  const dtInput = document.getElementById('depDateTime');
+  if (dtInput && !dtInput.value) {
+    const d = new Date();
+    d.setHours(d.getHours() + 1, 0, 0, 0);
+    const tz = d.getTimezoneOffset() * 60000;
+    dtInput.value = new Date(d.getTime() - tz).toISOString().slice(0, 16);
+  }
+
+  // Préchargement caméras (silencieux)
+  if (document.getElementById('cameraToggle')?.checked) {
+    loadCameras().catch(e => uiLog('Préchargement caméras échoué: ' + e.message, 'warn'));
+  }
+
+  uiLog('▶ Déploiement+ initialisé', 'ok');
+});
+
 </script>
 </body>
 </html>
