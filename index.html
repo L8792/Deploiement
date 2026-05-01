@@ -2576,9 +2576,13 @@ function encodeGeoJSONtoPolyline(geojson) {
   );
 }
 
-/** Formate un datetime JS → YYYYMMDDTHHmmss pour PRIM */
+/** Formate un datetime-local → YYYYMMDDTHHmmss en heure LOCALE pour PRIM.
+ *  IMPORTANT : on ne passe PAS par toISOString() qui convertit en UTC.
+ *  "2026-05-01T09:46" → "20260501T094600"
+ */
 function toPrimDatetime(isoString) {
-  return new Date(isoString).toISOString().replace(/[-:]/g, '').replace(/\..*/, '');
+  const [datePart, timePart = '000000'] = isoString.split('T');
+  return datePart.replace(/-/g, '') + 'T' + timePart.replace(/:/g, '').padEnd(6, '0');
 }
 
 /** Construit les forbidden_uris[] selon les modes désactivés */
@@ -2631,6 +2635,7 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
   if (!isInIDF(deploymentPoint.lat, deploymentPoint.lon)) return null;
 
   const dtPrim    = toPrimDatetime(dt);
+  uiLog(`PRIM datetime: "${dt}" → "${dtPrim}" · to=${deploymentPoint.lon.toFixed(5)};${deploymentPoint.lat.toFixed(5)}`, 'info');
   const maxDurSec = (config.targetMinutes + config.toleranceMinutes) * 60;
   const minDurSec = Math.max(0, (config.targetMinutes - config.toleranceMinutes) * 60);
   const forbidden = buildForbiddenModes(config.modes);
@@ -2646,6 +2651,7 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
   forbidden.forEach(u => params.append('forbidden_uris[]', u));
 
   const url = `${PRIM_BASE}/journeys?${params.toString()}`;
+  uiLog(`PRIM → ${url.replace(PRIM_BASE, '...')}`, 'info');
 
   const cacheKey = `iso:${deploymentPoint.lat.toFixed(5)},${deploymentPoint.lon.toFixed(5)}|${dtPrim}|${config.targetMinutes}|${config.toleranceMinutes}|${config.maxTransfers}|${config.modes.join(',')}`;
   if (D.cache.transit.has(cacheKey)) return D.cache.transit.get(cacheKey);
@@ -2656,12 +2662,15 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
       signal: AbortSignal.timeout(15000),
     });
 
-    if (r.status === 401) { setPrimApiStatus('✗ Clé invalide', false); return null; }
-    if (r.status === 403) { setPrimApiStatus('✗ Quota dépassé', false); return null; }
+    if (r.status === 401) { setPrimApiStatus('✗ Clé invalide', false); uiLog('PRIM 401 — clé invalide', 'error'); return null; }
+    if (r.status === 403) { setPrimApiStatus('✗ Quota dépassé', false); uiLog('PRIM 403 — quota/accès', 'error'); return null; }
     if (!r.ok) { uiLog(`PRIM HTTP ${r.status}`, 'warn'); return null; }
 
     const data = await r.json();
+    if (data.error) uiLog(`PRIM error: ${data.error.id} — ${data.error.message}`, 'warn');
+    if (data.message) uiLog(`PRIM message: ${data.message}`, 'warn');
     const journeys = data.journeys;
+    uiLog(`PRIM: ${journeys?.length ?? 0} journeys reçus`, journeys?.length ? 'ok' : 'warn');
     if (!journeys?.length) {
       D.cache.transit.set(cacheKey, []);
       return [];
