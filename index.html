@@ -809,11 +809,9 @@ header h1 em { font-style:italic; color:var(--forest-2); font-weight:500; }
         <div class="section">
           <div class="section-title">Trajet cible</div>
 
-          <div class="field">
-            <label>Clé API PRIM (IDF)<span class="help-icon" data-tip="Clé Île-de-France Mobilités (prim.iledefrance-mobilites.fr). Gratuite, 20 000 req/jour. Si vide : estimation locale (hors IDF ou sans clé).">ⓘ</span></label>
-            <input type="text" id="primApiKey" placeholder="Votre clé PRIM (ex: abc123…)" autocomplete="off" spellcheck="false" style="font-family:'JetBrains Mono',monospace;font-size:.72rem;letter-spacing:.04em;">
-            <div id="primApiStatus" style="margin-top:5px;font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--ink-4);"></div>
-          </div>
+          <!-- Clé PRIM embarquée (non affichée) -->
+          <input type="hidden" id="primApiKey">
+          <div id="primApiStatus" style="margin-bottom:8px;font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--ink-4);padding:0 0 4px 0;"></div>
 
           <div class="field">
             <label>Heure de départ souhaitée<span class="help-icon" data-tip="Date/heure utilisée pour interroger les horaires GTFS IDFM via PRIM.">ⓘ</span></label>
@@ -2515,8 +2513,22 @@ function isInIDF(lat, lon) {
       && lon >= IDF_BBOX.lonMin && lon <= IDF_BBOX.lonMax;
 }
 
+// Clé PRIM obfusquée (XOR, split 3 morceaux — non lisible en clair dans le source)
+// Seed + morceaux séparés intentionnellement dans des contextes différents
+const _ks = [68, 43, 113, 147, 162, 95, 225, 56];
+function _dk(arr) { return arr.map((b,i) => String.fromCharCode(b ^ _ks[i % _ks.length])).join(''); }
+// Morceaux stockés séparément pour éviter la reconstruction triviale
+const _ka = [17, 103, 4, 234, 237, 28, 163, 81, 124, 123];
+const _kb = [7, 170, 239, 110, 183, 107, 48, 90, 54, 162];
+const _kc = [150, 42, 216, 73, 46, 120, 29, 160, 235, 37, 147, 83];
+
 function getPrimApiKey() {
-  return (document.getElementById('primApiKey')?.value || '').trim();
+  // Reconstruit la clé à la volée depuis les morceaux obfusqués
+  const k = _dk([..._ka, ..._kb, ..._kc]);
+  // Hydrate le champ hidden pour que les autres fonctions fonctionnent normalement
+  const el = document.getElementById('primApiKey');
+  if (el && !el.value) el.value = k;
+  return k;
 }
 
 function setPrimApiStatus(msg, ok = null) {
@@ -3418,34 +3430,6 @@ function exportDeploymentWithDepartures(format) {
 // ═══════════════════════════════════════════════════════════
 // LISTENERS pour invalider l'onglet Départs lors de changements config
 // ═══════════════════════════════════════════════════════════
-// Listener clé PRIM : test de connexion à la volée
-document.addEventListener('DOMContentLoaded', () => {
-  const keyEl = document.getElementById('primApiKey');
-  if (keyEl) {
-    let keyTimer = null;
-    keyEl.addEventListener('input', () => {
-      clearTimeout(keyTimer);
-      const key = keyEl.value.trim();
-      if (!key) { setPrimApiStatus(''); return; }
-      setPrimApiStatus('Vérification…');
-      keyTimer = setTimeout(async () => {
-        try {
-          const r = await fetch(`${PRIM_BASE}/coverage`, {
-            headers: { 'apikey': key },
-            signal: AbortSignal.timeout(6000),
-          });
-          if (r.ok) setPrimApiStatus('✓ Clé valide · PRIM connecté', true);
-          else if (r.status === 401) setPrimApiStatus('✗ Clé invalide (401)', false);
-          else if (r.status === 403) setPrimApiStatus('✗ Accès refusé (403)', false);
-          else setPrimApiStatus(`? HTTP ${r.status}`, null);
-        } catch (e) {
-          setPrimApiStatus('? Vérification impossible (réseau)', null);
-        }
-      }, 800);
-    });
-  }
-});
-
 ['depTargetMin', 'depToleranceMin', 'depMaxWalk', 'depMinSpacing', 'depMaxPerStation', 'depMaxTransfers', 'depDateTime'].forEach(id => {
   const el = document.getElementById(id);
   if (el) {
@@ -3476,6 +3460,12 @@ window.addEventListener('load', () => {
     loadCameras().catch(e => uiLog('Préchargement caméras échoué: ' + e.message, 'warn'));
   }
 
+  // Initialiser silencieusement la clé PRIM (hydrate le champ hidden)
+  const _primKey = getPrimApiKey();
+  if (_primKey && isInIDF) {
+    setPrimApiStatus('PRIM IDFM · prêt', true);
+    uiLog('▶ Clé PRIM chargée (IDFM)', 'ok');
+  }
   uiLog('▶ Déploiement+ initialisé', 'ok');
 });
 
