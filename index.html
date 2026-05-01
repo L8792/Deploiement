@@ -833,12 +833,6 @@ header h1 em { font-style:italic; color:var(--forest-2); font-weight:500; }
             </div>
           </div>
 
-          <div class="field" style="margin-top:14px;">
-            <label>Marche max aux extrémités<span class="help-icon" data-tip="Distance pédestre acceptable entre point de départ candidat et la station, et entre la station d'arrivée et le point de déploiement.">ⓘ</span></label>
-            <input type="range" id="depMaxWalk" min="100" max="1500" value="800" step="50"
-              oninput="document.getElementById('depMaxWalkVal').textContent=this.value">
-            <div class="range-val"><strong id="depMaxWalkVal">800</strong><small>m</small></div>
-          </div>
         </div>
 
         <!-- Stratégie d'optimisation -->
@@ -918,8 +912,10 @@ header h1 em { font-style:italic; color:var(--forest-2); font-weight:500; }
             <code>écart minimal</code> : minimise σ.<br>
             <code>temps égal</code> : durée = cible exacte.<br>
             <code>couverture</code> : maximise la dispersion géographique.</p>
+            <p><b>Proximité des stations</b><br>
+            La distance pédestre station→déploiement est calculée automatiquement via Valhalla. Les stations trop éloignées à pied (> 35% du temps cible) sont éliminées sans seuil fixe à configurer.</p>
             <p><b>Fallback</b><br>
-            Si Transitous est indisponible, l'app charge les stations via Overpass et estime les durées avec des vitesses moyennes par mode (badge "estimation").</p>
+            Si PRIM est indisponible (hors IDF, pas de clé), l'app utilise les stations Overpass et estime les durées avec des vitesses moyennes par mode (badge "estimation").</p>
           </div>
         </div>
 
@@ -1092,7 +1088,7 @@ window.D = {
       modes: ['subway','tram','bus','rail'],
       targetMinutes: 30,
       toleranceMinutes: 5,
-      maxWalkM: 800,
+      maxWalkM: 800,  // calculé dynamiquement selon la station
       strategy: 'min_stddev',
       minSpacingM: 0,
       maxPerStation: 1,
@@ -2552,7 +2548,7 @@ function estimateLocalTC(from, to, mode) {
   const mdl = TC_MODEL[mode] || TC_MODEL.bus;
   const walkSpeedKmh = 4.8;
   const distFromToStation = haversine(from, to);  // from = station dans notre cas
-  const walkToSec   = (Math.min(distFromToStation, D.departures.config.maxWalkM) * 1.3) / (walkSpeedKmh * 1000 / 3600);
+  const walkToSec   = (distFromToStation * 1.3) / (walkSpeedKmh * 1000 / 3600);
   const transitDistM = haversine(from, to) * mdl.detour;
   const transitSec   = transitDistM / (mdl.speedKmh * 1000 / 3600);
   return {
@@ -2608,7 +2604,8 @@ async function planTransitRoute(from, to, _station, mode) {
       count:         '1',
       max_duration:  String((D.departures.config.targetMinutes + D.departures.config.toleranceMinutes + 10) * 60),
       max_transfers: String(D.departures.config.maxTransfers),
-      max_walking_duration_to_pt: String(Math.round(D.departures.config.maxWalkM / (4.8 * 1000 / 3600))),
+      // marche max auto = 35% du temps cible (en secondes)
+      max_walking_duration_to_pt: String(Math.round(D.departures.config.targetMinutes * 60 * 0.35)),
     });
     if (forbidden.length) params.set('forbidden_uris[]', forbidden.join(','));
 
@@ -2642,12 +2639,18 @@ async function planTransitRoute(from, to, _station, mode) {
           transfers:    j.nb_transfers || 0,
           walkDistance: j.distances?.walking || 0,
           legs: (j.sections || [])
-            .filter(s => s.type === 'public_transport' || s.type === 'street_network')
+            .filter(s => s.type === 'public_transport' || s.type === 'street_network' || s.type === 'waiting')
+            .filter(s => s.type !== 'waiting')
             .map(s => ({
-              mode:        s.type === 'street_network' ? 'walk' : (s.display_informations?.physical_mode || mode).toLowerCase().replace(/ /g,'_'),
-              route:       s.display_informations?.label || '',
+              mode:        s.type === 'street_network' ? 'walk'
+                         : (s.display_informations?.physical_mode || mode).toLowerCase().replace(/[^a-z]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,''),
+              route:       s.display_informations?.label || s.display_informations?.code || '',
+              routeName:   s.display_informations?.name || '',
+              physicalMode: s.display_informations?.physical_mode || '',
               duration:    s.duration,
               distance:    s.geojson?.properties?.length || 0,
+              from:        { name: s.from?.name || s.from?.stop_point?.name || s.from?.address?.label || '' },
+              to:          { name: s.to?.name   || s.to?.stop_point?.name   || s.to?.address?.label   || '' },
               legGeometry: s.geojson ? { points: encodeGeoJSONtoPolyline(s.geojson) } : null,
             })),
           source: 'prim',
@@ -2774,33 +2777,73 @@ async function generateDepartureCandidates(deploymentPoint, deploymentIdx, confi
     return candidates;
   }
 
-  // Mode TC : on prend les K stations les plus proches "raisonnables" et on plan
-  const speedTransit = 25; // estimation km/h moyen pour pré-filtrage
-  const targetDistM = (targetSec / 3600) * speedTransit * 1000;
+  // Mode TC
+  // Pré-filtrage géographique : stations dont la distance orthodromique
+  // est compatible avec la fenêtre temporelle (en supposant ~25 km/h moyen)
+  const speedTransit = 25;
+  const targetDistM  = (targetSec / 3600) * speedTransit * 1000;
+  const WALK_SPEED_MS = 4.8 * 1000 / 3600; // 4.8 km/h
+
+  // On prend les 25 stations les mieux positionnées (autour de la distance cible)
   const candidateStations = allStations
     .map(s => ({ ...s, distFromDep: haversine(s, deploymentPoint) }))
-    .filter(s => s.distFromDep > 500 && s.distFromDep < targetDistM * 1.8)
+    .filter(s => s.distFromDep > 200 && s.distFromDep < targetDistM * 2.0)
     .sort((a, b) => Math.abs(a.distFromDep - targetDistM) - Math.abs(b.distFromDep - targetDistM))
-    .slice(0, 15);
+    .slice(0, 25);
 
-  for (const station of candidateStations) {
-    const distStationToDep = haversine(station, deploymentPoint);
-    if (distStationToDep < 200) continue;
-    const plan = await planTransitRoute(
-      station, deploymentPoint, station, station.mode
-    );
+  // Calculer la vraie distance pédestre station→déploiement via Valhalla
+  // pour éliminer les stations inaccessibles à pied (pas de seuil fixe)
+  const walkTimesToDep = await getWalkTimes(deploymentPoint, candidateStations);
+
+  for (let si = 0; si < candidateStations.length; si++) {
+    const station = candidateStations[si];
+    const walkToDep = walkTimesToDep[si]; // secondes Valhalla ou 9999
+
+    // Seuil auto : la marche depuis la station jusqu'au déploiement
+    // ne doit pas dépasser la moitié de la tolérance (sinon le TC ne sert à rien)
+    const maxWalkSec = (config.targetMinutes * 0.35) * 60; // 35% du temps cible
+    if (!walkToDep || walkToDep >= 9000) continue; // inaccessible
+    if (walkToDep > maxWalkSec) continue;          // trop loin à pied
+
+    const plan = await planTransitRoute(station, deploymentPoint, station, station.mode);
     if (!plan) continue;
     if (plan.duration < minSec || plan.duration > maxSec) continue;
+
+    // Nom de la station : PRIM renvoie le nom dans les legs, sinon OSM name
+    let stationName = station.name;
+    if (plan.source === 'prim' && plan.legs?.length) {
+      // Premier leg TC (pas marche) → from.name est la station de départ
+      const firstTransitLeg = plan.legs.find(l => l.mode !== 'walk');
+      if (firstTransitLeg?.from?.name) stationName = firstTransitLeg.from.name;
+    }
+
+    // Lignes empruntées (PRIM) ou mode OSM (estimation)
+    const lines = [];
+    if (plan.source === 'prim' && plan.legs) {
+      plan.legs.forEach(l => {
+        if (l.mode !== 'walk' && l.route) lines.push(l.route);
+      });
+    }
+
     candidates.push({
-      station:        { lat: station.lat, lon: station.lon, name: station.name, mode: station.mode },
+      station: {
+        lat:   station.lat,
+        lon:   station.lon,
+        name:  stationName,
+        mode:  station.mode,
+        lines: lines,             // lignes TC empruntées
+        walkToDep_sec: walkToDep, // marche réelle station→déploiement
+      },
       deploymentIdx,
       deploymentPoint,
-      duration_sec:   plan.duration,
-      walk_distance_m: plan.walkDistance || 0,
-      transfers:      0,
-      modes_used:     [station.mode],
-      itinerary:      plan,
-      source:         'estimate',
+      duration_sec:    plan.duration,
+      walk_distance_m: plan.walkDistance || Math.round(walkToDep * WALK_SPEED_MS),
+      transfers:       plan.transfers || 0,
+      modes_used:      plan.legs
+        ? [...new Set(plan.legs.filter(l => l.mode !== 'walk').map(l => l.mode))]
+        : [station.mode],
+      itinerary: plan,
+      source:    plan.source,
     });
   }
 
@@ -3038,7 +3081,6 @@ async function runDepartures() {
   const cfg = D.departures.config;
   cfg.targetMinutes    = parseInt(document.getElementById('depTargetMin').value);
   cfg.toleranceMinutes = parseInt(document.getElementById('depToleranceMin').value);
-  cfg.maxWalkM         = parseInt(document.getElementById('depMaxWalk').value);
   cfg.minSpacingM      = parseInt(document.getElementById('depMinSpacing').value);
   cfg.maxPerStation    = parseInt(document.getElementById('depMaxPerStation').value);
   cfg.maxTransfers     = parseInt(document.getElementById('depMaxTransfers').value);
@@ -3134,7 +3176,7 @@ async function runDepartures() {
     setDepStep('routing', 'error');
     showModal(
       'Pas de candidats trouvés',
-      `Aucun point de départ TC trouvé pour le(s) joueur(s) ${missing.join(', ')} dans la fenêtre [${cfg.targetMinutes - cfg.toleranceMinutes}..${cfg.targetMinutes + cfg.toleranceMinutes}] min.\n\nEssaie : élargir la tolérance, augmenter la marche max, ou ajouter des modes.`
+      `Aucun point de départ TC trouvé pour le(s) joueur(s) ${missing.join(', ')} dans la fenêtre [${cfg.targetMinutes - cfg.toleranceMinutes}..${cfg.targetMinutes + cfg.toleranceMinutes}] min.\n\nEssaie : élargir la tolérance, ajouter des modes de transport, ou vérifier que des stations existent dans la zone.`
     );
     btn.disabled = false;
     return;
@@ -3240,12 +3282,25 @@ function renderDepartureResults(assigned) {
       iconAnchor: [14, 14],
     });
     const startMarker = L.marker([a.station.lat, a.station.lon], { icon: startIcon });
+    // Lignes pour le popup
+    const popupLines = (() => {
+      if (!a.itinerary?.legs?.length) return a.station.lines?.map(l=>`<span style="background:var(--transit-soft);color:var(--transit);padding:1px 5px;border-radius:3px;font-weight:600;font-size:.7rem;">${l}</span>`).join(' ') || '';
+      const seen = new Set();
+      return a.itinerary.legs.filter(l=>l.mode!=='walk'&&l.route).map(l=>{
+        if(seen.has(l.route)) return '';
+        seen.add(l.route);
+        return `<span style="background:var(--transit-soft);color:var(--transit);padding:1px 5px;border-radius:3px;font-weight:600;font-size:.7rem;">${l.route}</span>`;
+      }).join(' ');
+    })();
     startMarker.bindPopup(`
-      <div style="font-family:'Inter Tight',sans-serif;min-width:220px;">
-        <div style="font-size:.7rem;color:var(--transit);font-weight:600;margin-bottom:6px;letter-spacing:.05em;">DÉPART JOUEUR ${i + 1}</div>
-        <div style="font-size:.95rem;font-weight:600;color:var(--ink);margin-bottom:6px;font-family:'Fraunces',serif;">${a.station.name}</div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--ink-3);">
-          ${(a.duration_sec / 60).toFixed(1)} min · ${a.transfers} corresp. · ${a.modes_used.join('+')}
+      <div style="font-family:'Inter Tight',sans-serif;min-width:230px;">
+        <div style="font-size:.65rem;color:var(--transit);font-weight:600;margin-bottom:6px;letter-spacing:.08em;text-transform:uppercase;">Départ Joueur ${i + 1}</div>
+        <div style="font-size:.95rem;font-weight:600;color:var(--ink);margin-bottom:4px;font-family:'Fraunces',serif;">${a.station.name}</div>
+        ${popupLines ? `<div style="margin-bottom:6px;display:flex;gap:4px;flex-wrap:wrap;">${popupLines}</div>` : ''}
+        <div style="font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--ink-3);line-height:1.6;">
+          ⏱ ${(a.duration_sec / 60).toFixed(1)} min au total<br>
+          ${a.transfers > 0 ? `🔄 ${a.transfers} correspondance${a.transfers>1?'s':''}<br>` : ''}
+          ${a.walk_distance_m ? `🚶 ${Math.round(a.walk_distance_m)}m à pied` : ''}
         </div>
       </div>`);
     startMarker.addTo(layer);
@@ -3273,12 +3328,30 @@ function renderDepartureResults(assigned) {
     const dt_diff_str = (dt_diff >= 0 ? '+' : '') + (dt_diff / 60).toFixed(1);
     const dt_color = Math.abs(dt_diff) < 60 ? 'var(--forest)' : (Math.abs(dt_diff) < 180 ? 'var(--ochre)' : 'var(--rust)');
 
+    // Chips de modes + lignes empruntées
     let modesChips = '';
-    if (a.modes_used.length) {
+    const modeIcon = m => m === 'subway' || m === 'metro' ? '🚇' : m === 'tram' || m === 'tramway' ? '🚃' : m === 'bus' ? '🚌' : m === 'rail' || m === 'train' || m === 'localtrain' ? '🚆' : m === 'rapidtransit' ? '🚈' : m === 'walk' ? '🚶' : '🚍';
+    const modeLabel = m => m === 'subway' || m === 'metro' ? 'Métro' : m === 'tram' || m === 'tramway' ? 'Tram' : m === 'bus' ? 'Bus' : m === 'rail' || m === 'train' || m === 'localtrain' ? 'Train' : m === 'rapidtransit' ? 'RER' : m === 'walk' ? 'Marche' : m;
+
+    if (a.itinerary?.legs?.length) {
+      // PRIM ou estimation avec legs : afficher chaque segment TC avec son numéro de ligne
+      const seen = new Set();
+      a.itinerary.legs.forEach(leg => {
+        if (leg.mode === 'walk') return;
+        const key = leg.route || leg.mode;
+        if (seen.has(key)) return;
+        seen.add(key);
+        const icon = modeIcon(leg.mode);
+        const label = leg.route ? `${icon} <b>${leg.route}</b>` : `${icon} ${modeLabel(leg.mode)}`;
+        modesChips += `<span class="dep-mode-chip">${label}</span>`;
+      });
+      // Toujours ajouter la marche si présente
+      const hasWalk = a.itinerary.legs.some(l => l.mode === 'walk' && l.duration > 30);
+      if (hasWalk) modesChips += `<span class="dep-mode-chip walk">🚶 ${Math.round(a.walk_distance_m || 0)}m</span>`;
+    } else if (a.modes_used.length) {
       modesChips = a.modes_used.map(m => {
         const cl = m === 'walk' ? 'walk' : '';
-        const icon = m === 'subway' ? '🚇' : m === 'tram' ? '🚃' : m === 'bus' ? '🚌' : m === 'rail' ? '🚆' : '🚶';
-        return `<span class="dep-mode-chip ${cl}">${icon} ${m}</span>`;
+        return `<span class="dep-mode-chip ${cl}">${modeIcon(m)} ${modeLabel(m)}</span>`;
       }).join('');
     }
 
@@ -3430,7 +3503,7 @@ function exportDeploymentWithDepartures(format) {
 // ═══════════════════════════════════════════════════════════
 // LISTENERS pour invalider l'onglet Départs lors de changements config
 // ═══════════════════════════════════════════════════════════
-['depTargetMin', 'depToleranceMin', 'depMaxWalk', 'depMinSpacing', 'depMaxPerStation', 'depMaxTransfers', 'depDateTime'].forEach(id => {
+['depTargetMin', 'depToleranceMin', 'depMinSpacing', 'depMaxPerStation', 'depMaxTransfers', 'depDateTime'].forEach(id => {
   const el = document.getElementById(id);
   if (el) {
     el.addEventListener('change', () => {
