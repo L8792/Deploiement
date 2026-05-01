@@ -2565,125 +2565,185 @@ function estimateLocalTC(from, to, mode) {
   };
 }
 
-/**
- * Calcule un itinéraire TC via PRIM (si clé + IDF) ou estimation locale.
- * @param {object} from  — point de départ {lat, lon}
- * @param {object} to    — point d'arrivée {lat, lon}
- * @param {string} mode  — mode TC principal de la station ('subway', 'bus', etc.)
- */
-async function planTransitRoute(from, to, _station, mode) {
-  const apiKey = getPrimApiKey();
-  const cacheKey = `${from.lat.toFixed(5)},${from.lon.toFixed(5)}->${to.lat.toFixed(5)},${to.lon.toFixed(5)}|${mode}`;
-  if (D.cache.transit.has(cacheKey)) return D.cache.transit.get(cacheKey);
+// ═══════════════════════════════════════════════════════════
+// HELPERS COMMUNS
+// ═══════════════════════════════════════════════════════════
 
-  // ── Branche PRIM (clé présente + point en IDF) ───────────
-  if (apiKey && isInIDF(from.lat, from.lon) && isInIDF(to.lat, to.lon)) {
-    const dt = document.getElementById('depDateTime')?.value;
-    if (!dt) return null;
-    const dtObj  = new Date(dt);
-    const dtPrim = dtObj.toISOString().replace(/[-:]/g, '').replace(/\..*/, '');  // YYYYMMDDTHHmmss
-
-    // Mapping mode OSM → physical_modes PRIM
-    const modeMap = {
-      subway: 'physical_mode:Metro,physical_mode:RapidTransit',
-      tram:   'physical_mode:Tramway',
-      bus:    'physical_mode:Bus,physical_mode:Coach',
-      rail:   'physical_mode:Train,physical_mode:LocalTrain,physical_mode:RapidTransit',
-    };
-    const forbidden = Object.entries(modeMap)
-      .filter(([m]) => !D.departures.config.modes.includes(m))
-      .map(([, v]) => v.split(','))
-      .flat()
-      .filter((v, i, a) => a.indexOf(v) === i);
-
-    const params = new URLSearchParams({
-      from:          `${from.lon};${from.lat}`,
-      to:            `${to.lon};${to.lat}`,
-      datetime:      dtPrim,
-      datetime_represents: 'departure',
-      count:         '1',
-      max_duration:  String((D.departures.config.targetMinutes + D.departures.config.toleranceMinutes + 10) * 60),
-      max_transfers: String(D.departures.config.maxTransfers),
-      // marche max auto = 35% du temps cible (en secondes)
-      max_walking_duration_to_pt: String(Math.round(D.departures.config.targetMinutes * 60 * 0.35)),
-    });
-    if (forbidden.length) params.set('forbidden_uris[]', forbidden.join(','));
-
-    const url = `${PRIM_BASE}/journeys?${params.toString()}`;
-
-    try {
-      const r = await fetch(url, {
-        headers: { 'apikey': apiKey },
-        signal: AbortSignal.timeout(10000),
-      });
-
-      if (r.status === 401) {
-        setPrimApiStatus('✗ Clé invalide', false);
-        uiLog('PRIM: clé API invalide (401)', 'warn');
-        // Bascule sur estimation locale pour ce run
-      } else if (r.status === 403) {
-        setPrimApiStatus('✗ Quota dépassé ou clé révoquée', false);
-        uiLog('PRIM: 403 quota/accès', 'warn');
-      } else if (r.ok) {
-        const data = await r.json();
-        const journeys = data.journeys;
-        if (!journeys || !journeys.length) {
-          D.cache.transit.set(cacheKey, null);
-          return null;
-        }
-        const j = journeys[0];
-        const result = {
-          duration:     j.duration,
-          walkTime:     j.durations?.walking || 0,
-          transitTime:  j.durations?.transit || 0,
-          transfers:    j.nb_transfers || 0,
-          walkDistance: j.distances?.walking || 0,
-          legs: (j.sections || [])
-            .filter(s => s.type === 'public_transport' || s.type === 'street_network' || s.type === 'waiting')
-            .filter(s => s.type !== 'waiting')
-            .map(s => ({
-              mode:        s.type === 'street_network' ? 'walk'
-                         : (s.display_informations?.physical_mode || mode).toLowerCase().replace(/[^a-z]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,''),
-              route:       s.display_informations?.label || s.display_informations?.code || '',
-              routeName:   s.display_informations?.name || '',
-              physicalMode: s.display_informations?.physical_mode || '',
-              duration:    s.duration,
-              distance:    s.geojson?.properties?.length || 0,
-              from:        { name: s.from?.name || s.from?.stop_point?.name || s.from?.address?.label || '' },
-              to:          { name: s.to?.name   || s.to?.stop_point?.name   || s.to?.address?.label   || '' },
-              legGeometry: s.geojson ? { points: encodeGeoJSONtoPolyline(s.geojson) } : null,
-            })),
-          source: 'prim',
-        };
-        setPrimApiStatus(`✓ PRIM actif`, true);
-        D.cache.transit.set(cacheKey, result);
-        return result;
-      }
-    } catch (e) {
-      uiLog(`PRIM fetch error: ${e.message}`, 'warn');
-    }
-  }
-
-  // ── Branche estimation locale (fallback) ─────────────────
-  const est = estimateLocalTC(from, to, mode);
-  D.cache.transit.set(cacheKey, est);
-  return est;
-}
-
-/**
- * Encode un GeoJSON LineString en polyline Google (precision 5) pour l'affichage Leaflet.
- * PRIM retourne des sections.geojson (GeoJSON Feature), pas des polylines encodées.
- */
+/** Encode GeoJSON coords → marqueur spécial pour renderTransitItinerary */
 function encodeGeoJSONtoPolyline(geojson) {
-  // On stocke les coords brutes pour les décoder ensuite dans renderTransitItinerary
-  // On encode rien : on retourne un marqueur spécial pour différencier
   return '__geojson__' + JSON.stringify(
     (geojson.coordinates || geojson.geometry?.coordinates || []).map(c => [c[1], c[0]])
   );
 }
 
+/** Formate un datetime JS → YYYYMMDDTHHmmss pour PRIM */
+function toPrimDatetime(isoString) {
+  return new Date(isoString).toISOString().replace(/[-:]/g, '').replace(/\..*/, '');
+}
+
+/** Construit les forbidden_uris[] selon les modes désactivés */
+function buildForbiddenModes(activeModes) {
+  const modeMap = {
+    subway: ['physical_mode:Metro', 'physical_mode:RapidTransit'],
+    tram:   ['physical_mode:Tramway'],
+    bus:    ['physical_mode:Bus', 'physical_mode:Coach'],
+    rail:   ['physical_mode:Train', 'physical_mode:LocalTrain'],
+  };
+  const forbidden = [];
+  Object.entries(modeMap).forEach(([m, uris]) => {
+    if (!activeModes.includes(m)) forbidden.push(...uris);
+  });
+  return [...new Set(forbidden)];
+}
+
+/** Parse une section Navitia → leg normalisé */
+function parseNavitiaSection(s, fallbackMode) {
+  return {
+    mode:         s.type === 'street_network' ? 'walk'
+                : (s.display_informations?.physical_mode || fallbackMode)
+                    .toLowerCase().replace(/[^a-z]/g, '_')
+                    .replace(/_+/g, '_').replace(/^_|_$/g, ''),
+    route:        s.display_informations?.label || s.display_informations?.code || '',
+    routeName:    s.display_informations?.name || '',
+    physicalMode: s.display_informations?.physical_mode || '',
+    duration:     s.duration,
+    distance:     s.geojson?.properties?.length || 0,
+    from:         { name: s.from?.name || s.from?.stop_point?.name || s.from?.address?.label || '' },
+    to:           { name: s.to?.name   || s.to?.stop_point?.name   || s.to?.address?.label   || '' },
+    legGeometry:  s.geojson ? { points: encodeGeoJSONtoPolyline(s.geojson) } : null,
+  };
+}
+
 // ═══════════════════════════════════════════════════════════
-// FALLBACK : stations Overpass + estimation durée
+// PRIM — Isochrone inverse (arrivée au déploiement)
+//
+// Logique :
+//   Navitia /journeys?to=déploiement&datetime_represents=arrival
+//   → retourne tous les stop_points depuis lesquels on peut
+//     ARRIVER au déploiement en ≤ max_duration à l'heure voulue.
+//   Ces stop_points sont directement les points de départ candidats.
+//   Un seul appel PRIM par déploiement.
+// ═══════════════════════════════════════════════════════════
+async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
+  const apiKey  = getPrimApiKey();
+  const dt      = document.getElementById('depDateTime')?.value;
+  if (!apiKey || !dt) return null;
+  if (!isInIDF(deploymentPoint.lat, deploymentPoint.lon)) return null;
+
+  const dtPrim    = toPrimDatetime(dt);
+  const maxDurSec = (config.targetMinutes + config.toleranceMinutes) * 60;
+  const minDurSec = Math.max(0, (config.targetMinutes - config.toleranceMinutes) * 60);
+  const forbidden = buildForbiddenModes(config.modes);
+
+  const params = new URLSearchParams({
+    to:                   `${deploymentPoint.lon};${deploymentPoint.lat}`,
+    datetime:             dtPrim,
+    datetime_represents:  'arrival',
+    max_duration:         String(maxDurSec),
+    max_transfers:        String(config.maxTransfers),
+    count:                '50',   // on veut beaucoup de candidats, l'algo hongrois triera
+  });
+  forbidden.forEach(u => params.append('forbidden_uris[]', u));
+
+  const url = `${PRIM_BASE}/journeys?${params.toString()}`;
+
+  const cacheKey = `iso:${deploymentPoint.lat.toFixed(5)},${deploymentPoint.lon.toFixed(5)}|${dtPrim}|${config.targetMinutes}|${config.toleranceMinutes}|${config.maxTransfers}|${config.modes.join(',')}`;
+  if (D.cache.transit.has(cacheKey)) return D.cache.transit.get(cacheKey);
+
+  try {
+    const r = await fetch(url, {
+      headers: { 'apikey': apiKey },
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (r.status === 401) { setPrimApiStatus('✗ Clé invalide', false); return null; }
+    if (r.status === 403) { setPrimApiStatus('✗ Quota dépassé', false); return null; }
+    if (!r.ok) { uiLog(`PRIM HTTP ${r.status}`, 'warn'); return null; }
+
+    const data = await r.json();
+    const journeys = data.journeys;
+    if (!journeys?.length) {
+      D.cache.transit.set(cacheKey, []);
+      return [];
+    }
+
+    setPrimApiStatus('✓ PRIM actif', true);
+
+    // Dédupliquer : un candidat par stop_point de départ
+    const seen = new Map(); // clé = stop_point id ou coords arrondies
+
+    const candidates = [];
+    for (const j of journeys) {
+      const dur = j.duration;
+      if (dur < minDurSec || dur > maxDurSec) continue;
+
+      const sections = (j.sections || []).filter(s => s.type !== 'waiting' && s.type !== 'transfer');
+      if (!sections.length) continue;
+
+      // Premier stop_point de départ = where the passenger boards
+      const firstSection = sections[0];
+      const depFrom = firstSection.from;
+      const depLat  = depFrom?.stop_point?.coord?.lat || depFrom?.address?.coord?.lat || depFrom?.coord?.lat;
+      const depLon  = depFrom?.stop_point?.coord?.lon || depFrom?.address?.coord?.lon || depFrom?.coord?.lon;
+      const depName = depFrom?.stop_point?.name || depFrom?.name || depFrom?.address?.label || '';
+      const depId   = depFrom?.stop_point?.id   || `${parseFloat(depLat).toFixed(4)},${parseFloat(depLon).toFixed(4)}`;
+
+      if (!depLat || !depLon) continue;
+      if (seen.has(depId) && seen.get(depId).duration_sec <= dur) continue;
+
+      // Lignes empruntées
+      const lines = [];
+      const modesUsed = new Set();
+      sections.forEach(s => {
+        if (s.type === 'public_transport') {
+          const label = s.display_informations?.label || s.display_informations?.code || '';
+          if (label) lines.push(label);
+          const pm = (s.display_informations?.physical_mode || '').toLowerCase();
+          if (pm) modesUsed.add(pm.replace(/[^a-z]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,''));
+        }
+      });
+
+      const candidate = {
+        station: {
+          lat:   parseFloat(depLat),
+          lon:   parseFloat(depLon),
+          name:  depName,
+          mode:  [...modesUsed][0] || 'subway',
+          lines: [...new Set(lines)],
+        },
+        duration_sec:    dur,
+        walk_distance_m: j.distances?.walking || 0,
+        transfers:       j.nb_transfers || 0,
+        modes_used:      [...modesUsed],
+        itinerary: {
+          duration:    dur,
+          walkTime:    j.durations?.walking || 0,
+          transitTime: j.durations?.transit || 0,
+          transfers:   j.nb_transfers || 0,
+          walkDistance: j.distances?.walking || 0,
+          legs: sections.map(s => parseNavitiaSection(s, 'subway')),
+          source: 'prim',
+        },
+        source: 'prim',
+      };
+
+      seen.set(depId, candidate);
+      candidates.push(candidate);
+    }
+
+    D.cache.transit.set(cacheKey, candidates);
+    uiLog(`  PRIM isochrone → ${candidates.length} candidats départ`, 'ok');
+    return candidates;
+
+  } catch (e) {
+    uiLog(`PRIM isochrone error: ${e.message}`, 'warn');
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// FALLBACK — Stations Overpass + estimation locale
+//   Utilisé si hors IDF, pas de clé, ou PRIM indisponible
 // ═══════════════════════════════════════════════════════════
 async function fetchTransitStations(bbox, modes) {
   const queries = [];
@@ -2692,16 +2752,11 @@ async function fetchTransitStations(bbox, modes) {
     queries.push(`node["railway"="subway_entrance"](${bbox});`);
     queries.push(`node["public_transport"="station"](${bbox});`);
   }
-  if (modes.includes('tram')) {
-    queries.push(`node["railway"="tram_stop"](${bbox});`);
-  }
-  if (modes.includes('bus')) {
-    queries.push(`node["highway"="bus_stop"](${bbox});`);
-  }
+  if (modes.includes('tram'))  queries.push(`node["railway"="tram_stop"](${bbox});`);
+  if (modes.includes('bus'))   queries.push(`node["highway"="bus_stop"](${bbox});`);
   if (!queries.length) return [];
 
   const query = `[out:json][timeout:25];\n(\n  ${queries.join('\n  ')}\n);\nout center tags;`;
-
   const servers = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
   for (let i = 0; i < servers.length * 2; i++) {
     try {
@@ -2732,122 +2787,85 @@ async function fetchTransitStations(bbox, modes) {
   return [];
 }
 
+async function fetchDepartureCandidatesFallback(deploymentPoint, config, allStations) {
+  const targetSec  = config.targetMinutes * 60;
+  const tolSec     = config.toleranceMinutes * 60;
+  const minSec     = targetSec - tolSec;
+  const maxSec     = targetSec + tolSec;
+  const WALK_MS    = 4.8 * 1000 / 3600;
+
+  // Pré-filtrage géométrique : stations dont la distance est plausible
+  const targetDistM = (targetSec / 3600) * 25 * 1000;
+  const candidateStations = allStations
+    .map(s => ({ ...s, distFromDep: haversine(s, deploymentPoint) }))
+    .filter(s => s.distFromDep > 200 && s.distFromDep < targetDistM * 2.0)
+    .sort((a, b) => Math.abs(a.distFromDep - targetDistM) - Math.abs(b.distFromDep - targetDistM))
+    .slice(0, 20);
+
+  // Marche réelle station→déploiement (batch Valhalla)
+  const walkTimes = await getWalkTimes(deploymentPoint, candidateStations);
+  const maxWalkSec = targetSec * 0.35;
+
+  const candidates = [];
+  for (let i = 0; i < candidateStations.length; i++) {
+    const s = candidateStations[i];
+    const wt = walkTimes[i];
+    if (!wt || wt >= 9000 || wt > maxWalkSec) continue;
+
+    const est = estimateLocalTC(s, deploymentPoint, s.mode);
+    if (!est || est.duration < minSec || est.duration > maxSec) continue;
+
+    candidates.push({
+      station:        { lat: s.lat, lon: s.lon, name: s.name, mode: s.mode, lines: [] },
+      duration_sec:   est.duration,
+      walk_distance_m: Math.round(wt * WALK_MS),
+      transfers:      0,
+      modes_used:     [s.mode],
+      itinerary:      est,
+      source:         'estimate',
+    });
+  }
+  return candidates;
+}
 
 // ═══════════════════════════════════════════════════════════
-// GÉNÉRATION DES CANDIDATS DÉPART
+// GÉNÉRATION DES CANDIDATS — orchestration PRIM + fallback
 // ═══════════════════════════════════════════════════════════
 async function generateDepartureCandidates(deploymentPoint, deploymentIdx, config, allStations) {
-  const candidates = [];
-  const targetSec = config.targetMinutes * 60;
-  const tolSec = config.toleranceMinutes * 60;
-  const minSec = targetSec - tolSec;
-  const maxSec = targetSec + tolSec;
-
-  // Mode marche seule : pas de TC, on utilise les lieux du déploiement comme candidats potentiels (alternatives du même secteur)
+  // Mode marche seule
   if (config.walkOnly) {
-    const altPool = D.geoFiltered || [];
-    // Filtre par distance approximative : à durée cible × vitesse de marche
-    const speedMs = getSpeedKmh() * 1000 / 3600;
-    const targetDistM = targetSec * speedMs;
-    const candidatesNearby = altPool.filter(p => {
-      const d = haversine(deploymentPoint, p);
-      return d > targetDistM * 0.5 && d < targetDistM * 1.5;
-    });
-    // Calcul réel pour les meilleurs
-    const sorted = candidatesNearby.sort((a, b) => {
-      const da = haversine(deploymentPoint, a), db = haversine(deploymentPoint, b);
-      return Math.abs(da - targetDistM) - Math.abs(db - targetDistM);
-    }).slice(0, 30);
-    for (const p of sorted) {
+    const targetSec = config.targetMinutes * 60;
+    const tolSec    = config.toleranceMinutes * 60;
+    const speedMs   = getSpeedKmh() * 1000 / 3600;
+    const targetDist = targetSec * speedMs;
+    const pool = (D.geoFiltered || [])
+      .filter(p => { const d = haversine(deploymentPoint, p); return d > targetDist * 0.4 && d < targetDist * 1.6; })
+      .sort((a, b) => Math.abs(haversine(deploymentPoint, a) - targetDist) - Math.abs(haversine(deploymentPoint, b) - targetDist))
+      .slice(0, 30);
+    const candidates = [];
+    for (const p of pool) {
       const sec = await calculateSingleWalkTime(p, deploymentPoint);
-      if (sec == null) continue;
-      if (sec < minSec || sec > maxSec) continue;
+      if (sec == null || sec < targetSec - tolSec || sec > targetSec + tolSec) continue;
       candidates.push({
-        station: { lat: p.lat, lon: p.lon, name: p.name || 'Position', mode: 'walk' },
-        deploymentIdx,
-        deploymentPoint,
-        duration_sec: sec,
-        walk_distance_m: haversine(p, deploymentPoint),
-        transfers: 0,
-        modes_used: ['walk'],
-        itinerary: null,
-        source: 'walk_only',
+        station: { lat: p.lat, lon: p.lon, name: p.name || 'Position', mode: 'walk', lines: [] },
+        deploymentIdx, deploymentPoint,
+        duration_sec: sec, walk_distance_m: haversine(p, deploymentPoint),
+        transfers: 0, modes_used: ['walk'], itinerary: null, source: 'walk_only',
       });
     }
     return candidates;
   }
 
-  // Mode TC
-  // Pré-filtrage géographique : stations dont la distance orthodromique
-  // est compatible avec la fenêtre temporelle (en supposant ~25 km/h moyen)
-  const speedTransit = 25;
-  const targetDistM  = (targetSec / 3600) * speedTransit * 1000;
-  const WALK_SPEED_MS = 4.8 * 1000 / 3600; // 4.8 km/h
+  // Mode TC : PRIM en priorité, fallback Overpass+estimation
+  let raw = await fetchDepartureCandidatesPRIM(deploymentPoint, config);
 
-  // On prend les 25 stations les mieux positionnées (autour de la distance cible)
-  const candidateStations = allStations
-    .map(s => ({ ...s, distFromDep: haversine(s, deploymentPoint) }))
-    .filter(s => s.distFromDep > 200 && s.distFromDep < targetDistM * 2.0)
-    .sort((a, b) => Math.abs(a.distFromDep - targetDistM) - Math.abs(b.distFromDep - targetDistM))
-    .slice(0, 25);
-
-  // Calculer la vraie distance pédestre station→déploiement via Valhalla
-  // pour éliminer les stations inaccessibles à pied (pas de seuil fixe)
-  const walkTimesToDep = await getWalkTimes(deploymentPoint, candidateStations);
-
-  for (let si = 0; si < candidateStations.length; si++) {
-    const station = candidateStations[si];
-    const walkToDep = walkTimesToDep[si]; // secondes Valhalla ou 9999
-
-    // Seuil auto : la marche depuis la station jusqu'au déploiement
-    // ne doit pas dépasser la moitié de la tolérance (sinon le TC ne sert à rien)
-    const maxWalkSec = (config.targetMinutes * 0.35) * 60; // 35% du temps cible
-    if (!walkToDep || walkToDep >= 9000) continue; // inaccessible
-    if (walkToDep > maxWalkSec) continue;          // trop loin à pied
-
-    const plan = await planTransitRoute(station, deploymentPoint, station, station.mode);
-    if (!plan) continue;
-    if (plan.duration < minSec || plan.duration > maxSec) continue;
-
-    // Nom de la station : PRIM renvoie le nom dans les legs, sinon OSM name
-    let stationName = station.name;
-    if (plan.source === 'prim' && plan.legs?.length) {
-      // Premier leg TC (pas marche) → from.name est la station de départ
-      const firstTransitLeg = plan.legs.find(l => l.mode !== 'walk');
-      if (firstTransitLeg?.from?.name) stationName = firstTransitLeg.from.name;
-    }
-
-    // Lignes empruntées (PRIM) ou mode OSM (estimation)
-    const lines = [];
-    if (plan.source === 'prim' && plan.legs) {
-      plan.legs.forEach(l => {
-        if (l.mode !== 'walk' && l.route) lines.push(l.route);
-      });
-    }
-
-    candidates.push({
-      station: {
-        lat:   station.lat,
-        lon:   station.lon,
-        name:  stationName,
-        mode:  station.mode,
-        lines: lines,             // lignes TC empruntées
-        walkToDep_sec: walkToDep, // marche réelle station→déploiement
-      },
-      deploymentIdx,
-      deploymentPoint,
-      duration_sec:    plan.duration,
-      walk_distance_m: plan.walkDistance || Math.round(walkToDep * WALK_SPEED_MS),
-      transfers:       plan.transfers || 0,
-      modes_used:      plan.legs
-        ? [...new Set(plan.legs.filter(l => l.mode !== 'walk').map(l => l.mode))]
-        : [station.mode],
-      itinerary: plan,
-      source:    plan.source,
-    });
+  if (!raw) {
+    // Fallback estimation locale
+    raw = await fetchDepartureCandidatesFallback(deploymentPoint, config, allStations);
   }
 
-  return candidates;
+  // Attacher deploymentIdx et deploymentPoint à chaque candidat
+  return (raw || []).map(c => ({ ...c, deploymentIdx, deploymentPoint }));
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -3113,46 +3131,46 @@ async function runDepartures() {
 
   uiLog(`▶ runDepartures(): ${D.selected.length} pts · modes=${cfg.walkOnly ? 'walk_only' : cfg.modes.join(',')} · cible=${cfg.targetMinutes}±${cfg.toleranceMinutes}min`);
 
-  // ───── ÉTAPE 1 : Données TC (stations) ─────
+  // ───── ÉTAPE 1 : Préparation sources TC ─────
   setDepStep('tc_data', 'running');
-  setDepStatus('Chargement des données TC…', 'running');
+  setDepStatus('Préparation des sources TC…', 'running');
 
-  let allStations = [];
-  if (!cfg.walkOnly) {
-    // Bbox élargie autour des déploiements
+  const primKey = getPrimApiKey();
+  const inIDF   = D.selected.every(s => isInIDF(s.lat, s.lon));
+  let allStations = []; // utilisé uniquement pour le fallback Overpass
+
+  if (cfg.walkOnly) {
+    setDepStep('tc_data', 'skip', 'mode marche seule');
+  } else if (primKey && inIDF) {
+    // Mode PRIM : isochrone inverse appelée par déploiement dans l'étape 2
+    setDepStep('tc_data', 'done', 'PRIM IDFM — isochrone inverse TC');
+    setPrimApiStatus('Prêt — calcul en cours…');
+    uiLog('Mode PRIM actif — isochrone inverse TC par déploiement', 'ok');
+  } else {
+    // Fallback : charger les stations Overpass une fois pour tous
+    if (primKey) {
+      uiLog('⚠ Clé PRIM présente mais déploiements hors IDF → fallback estimation', 'warn');
+      setPrimApiStatus('⚠ Hors IDF — estimation locale', null);
+    } else {
+      setPrimApiStatus('Aucune clé — estimation locale');
+    }
     const lats = D.selected.map(s => s.lat);
     const lons = D.selected.map(s => s.lon);
-    const speedKmh = 25; // approx vitesse moyenne TC
-    const radiusM = (cfg.targetMinutes / 60) * speedKmh * 1000 * 1.6;
+    const radiusM = (cfg.targetMinutes / 60) * 25 * 1000 * 1.6;
     const dLat = radiusM / 111320;
     const dLon = radiusM / (111320 * Math.cos((Math.min(...lats) + Math.max(...lats)) / 2 * Math.PI / 180));
     const bbox = `${Math.min(...lats) - dLat},${Math.min(...lons) - dLon},${Math.max(...lats) + dLat},${Math.max(...lons) + dLon}`;
-
     try {
       allStations = await fetchTransitStations(bbox, cfg.modes);
       D.departures.transitStations = allStations;
-      setDepStep('tc_data', 'done', `${allStations.length} stations dans la zone`);
-      const primKey = getPrimApiKey();
-      const inIDF = D.selected.every(s => isInIDF(s.lat, s.lon));
-      if (primKey && inIDF) {
-        uiLog(`✓ ${allStations.length} stations Overpass · Mode PRIM IDFM actif`, 'ok');
-        setPrimApiStatus('Prêt — en attente des requêtes…');
-      } else if (primKey && !inIDF) {
-        uiLog(`⚠ Clé PRIM présente mais déploiements hors IDF → estimation locale`, 'warn');
-        setPrimApiStatus('⚠ Hors IDF — estimation locale', null);
-      } else {
-        uiLog(`✓ ${allStations.length} stations · Estimation locale (pas de clé PRIM)`, 'ok');
-        setPrimApiStatus('Aucune clé — estimation locale');
-      }
+      setDepStep('tc_data', 'done', `${allStations.length} stations Overpass (fallback)`);
+      uiLog(`✓ ${allStations.length} stations chargées (fallback)`, 'ok');
     } catch (e) {
       setDepStep('tc_data', 'error', e.message);
-      uiLog(`Erreur stations: ${e.message}`, 'error');
-      showModal('Données TC indisponibles', 'Overpass n\'a pas pu être joint. Réessaie dans quelques secondes.');
+      showModal('Données TC indisponibles', "Overpass n'a pas pu être joint. Réessaie dans quelques secondes.");
       btn.disabled = false;
       return;
     }
-  } else {
-    setDepStep('tc_data', 'skip', 'mode marche seule');
   }
 
   // ───── ÉTAPE 2 : Génération candidats ─────
@@ -3182,8 +3200,10 @@ async function runDepartures() {
     return;
   }
 
-  // ───── ÉTAPE 3 : Routing (déjà fait dans l'étape 2 via planTransitRoute) ─────
-  setDepStep('routing', 'done', `${totalCands} itinéraires calculés`);
+  // ───── ÉTAPE 3 : Routing ─────
+  // Avec PRIM : intégré dans l'isochrone inverse (étape 2)
+  // Fallback : estimation locale calculée dans generateDepartureCandidates
+  setDepStep('routing', 'done', `${totalCands} itinéraires prêts`);
 
   // ───── ÉTAPE 4 : Optimisation ─────
   setDepStep('optimize', 'running');
