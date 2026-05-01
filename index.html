@@ -2671,6 +2671,16 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
     if (data.message) uiLog(`PRIM message: ${data.message}`, 'warn');
     const journeys = data.journeys;
     uiLog(`PRIM: ${journeys?.length ?? 0} journeys reçus`, journeys?.length ? 'ok' : 'warn');
+    if (journeys?.length) {
+      // Log structure du 1er journey pour diagnostic
+      const j0 = journeys[0];
+      uiLog(`J0 duration=${j0.duration} nb_transfers=${j0.nb_transfers} sections=${j0.sections?.length}`, 'info');
+      const s0 = j0.sections?.[0];
+      if (s0) {
+        uiLog(`S0 type=${s0.type} from_keys=${Object.keys(s0.from||{}).join(',')}`, 'info');
+        uiLog(`S0.from=${JSON.stringify(s0.from).slice(0,200)}`, 'info');
+      }
+    }
     if (!journeys?.length) {
       D.cache.transit.set(cacheKey, []);
       return [];
