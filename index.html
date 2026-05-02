@@ -2624,6 +2624,42 @@ function parseNavitiaSection(s, fallbackMode) {
 //             avec les IDs PRIM natifs récupérés en passe 1
 //             → Confirme la durée et enrichit les détails (lignes, géométries)
 // ═══════════════════════════════════════════════════════════
+/**
+ * Résout le stop_point PRIM le plus proche d'un point géographique.
+ * Utilise /places?q=lon;lat&type[]=stop_point
+ * Retourne l'ID PRIM natif (ex: "stop_point:IDFM:...") ou les coords en fallback.
+ */
+async function resolvePrimStopPoint(lon, lat, apiKey) {
+  const cacheKey = `places:${lon.toFixed(5)};${lat.toFixed(5)}`;
+  if (D.cache.transit.has(cacheKey)) return D.cache.transit.get(cacheKey);
+
+  try {
+    const params = new URLSearchParams({
+      q:           `${lon};${lat}`,
+      'type[]':    'stop_point',
+      count:       '1',
+    });
+    const r = await fetch(`${PRIM_BASE}/places?${params.toString()}`, {
+      headers: { 'apikey': apiKey },
+      signal:  AbortSignal.timeout(6000),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const sp = data.places?.[0]?.stop_point;
+    if (sp?.id) {
+      uiLog(`  /places → "${sp.name}" (${sp.id})`, 'info');
+      D.cache.transit.set(cacheKey, sp.id);
+      return sp.id;
+    }
+  } catch (e) {
+    uiLog(`/places error: ${e.message}`, 'warn');
+  }
+  // Fallback : coords brutes
+  const coords = `${lon};${lat}`;
+  D.cache.transit.set(cacheKey, coords);
+  return coords;
+}
+
 async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
   const apiKey = getPrimApiKey();
   const dt     = document.getElementById('depDateTime')?.value;
@@ -2636,22 +2672,24 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
   const minSec    = targetSec - tolSec;
   const maxSec    = targetSec + tolSec;
   const forbidden = buildForbiddenModes(config.modes);
-  const toStr     = `${deploymentPoint.lon};${deploymentPoint.lat}`;
 
-  uiLog(`PRIM P1: to=${toStr} dt=${dtPrim} [${Math.round(minSec/60)}..${Math.round(maxSec/60)}]min`, 'info');
+  // Résoudre le stop_point PRIM le plus proche du déploiement
+  const toId  = await resolvePrimStopPoint(deploymentPoint.lon, deploymentPoint.lat, apiKey);
+  const toStr = toId; // ID natif ou coords
+  uiLog(`PRIM P1: to="${toStr}" dt=${dtPrim} [${Math.round(minSec/60)}..${Math.round(maxSec/60)}]min`, 'info');
 
-  // ── PASSE 1 : journeys arrivant AU déploiement ──────────────────────────
+  // ── PASSE 1 : journeys arrivant AU stop_point du déploiement ─────────────
   const cacheKey1 = `prim1:${toStr}|${dtPrim}|${maxSec}|${config.maxTransfers}|${config.modes.join(',')}`;
-  let journeys1 = D.cache.transit.get(cacheKey1);
+  let journeys1 = D.cache.transit.has(cacheKey1) ? D.cache.transit.get(cacheKey1) : undefined;
 
   if (journeys1 === undefined) {
     const params1 = new URLSearchParams({
-      to:                   toStr,
-      datetime:             dtPrim,
-      datetime_represents:  'arrival',
-      max_duration:         String(maxSec),
-      max_transfers:        String(config.maxTransfers),
-      count:                '50',
+      to:                  toStr,
+      datetime:            dtPrim,
+      datetime_represents: 'arrival',
+      max_duration:        String(maxSec),
+      max_transfers:       String(config.maxTransfers),
+      count:               '50',
     });
     forbidden.forEach(u => params1.append('forbidden_uris[]', u));
     const url1 = `${PRIM_BASE}/journeys?${params1.toString()}`;
@@ -2660,7 +2698,7 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
     try {
       const r = await fetch(url1, {
         headers: { 'apikey': apiKey },
-        signal: AbortSignal.timeout(15000),
+        signal:  AbortSignal.timeout(15000),
       });
       if (r.status === 401) { setPrimApiStatus('✗ Clé invalide', false); return null; }
       if (r.status === 403) { setPrimApiStatus('✗ Quota dépassé', false); return null; }
@@ -2678,40 +2716,34 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
 
   if (!journeys1.length) return null;
 
-  // Log du 1er journey pour diagnostic
-  const j0 = journeys1[0];
-  const sec0 = j0.sections || [];
-  uiLog(`J0: dur=${j0.duration}s transfers=${j0.nb_transfers} sections=${sec0.length} types=${sec0.map(s=>s.type).join(',')}`, 'info');
-  if (sec0[0]) uiLog(`J0.from: ${JSON.stringify(sec0[0].from).slice(0,150)}`, 'info');
+  // Log diagnostic du 1er journey
+  const j0    = journeys1[0];
+  const secs0 = (j0.sections || []).filter(s => s.type !== 'waiting');
+  uiLog(`J0: dur=${j0.duration}s transfers=${j0.nb_transfers} sections=${secs0.length} types=${secs0.map(s=>s.type).join(',')}`, 'info');
+  if (secs0[0]) {
+    const f = secs0[0].from;
+    uiLog(`J0.from: ${JSON.stringify(f).slice(0, 200)}`, 'info');
+  }
 
-  // ── Extraire les points de départ depuis les journeys passe 1 ────────────
-  // Le `from` de la PREMIÈRE section = où le joueur part
-  const candidates1 = new Map(); // dedupKey → candidat
+  // ── Extraire les points de départ (sections[0].from) ──────────────────────
+  const candidates1 = new Map();
   for (const j of journeys1) {
     if (j.duration < minSec || j.duration > maxSec) continue;
     const sections = (j.sections || []).filter(s => s.type !== 'waiting' && s.type !== 'transfer');
     if (!sections.length) continue;
 
-    const fromSection = sections[0];
-    const fromObj     = fromSection.from;
+    // Ignorer les journeys sans TC (uniquement piéton)
+    const hasTC = sections.some(s => s.type === 'public_transport');
+    if (!hasTC) continue;
 
-    // Extraire coords du point de départ
-    const depLat = parseFloat(
-      fromObj?.stop_point?.coord?.lat ??
-      fromObj?.address?.coord?.lat    ??
-      fromObj?.coord?.lat             ?? 0
-    );
-    const depLon = parseFloat(
-      fromObj?.stop_point?.coord?.lon ??
-      fromObj?.address?.coord?.lon    ??
-      fromObj?.coord?.lon             ?? 0
-    );
+    const fromObj = sections[0].from;
+    const depLat  = parseFloat(fromObj?.stop_point?.coord?.lat ?? fromObj?.address?.coord?.lat ?? fromObj?.coord?.lat ?? 0);
+    const depLon  = parseFloat(fromObj?.stop_point?.coord?.lon ?? fromObj?.address?.coord?.lon ?? fromObj?.coord?.lon ?? 0);
     if (!depLat || !depLon) continue;
 
-    const depId   = fromObj?.stop_point?.id || fromObj?.id || `${depLat.toFixed(4)},${depLon.toFixed(4)}`;
+    const depId   = fromObj?.stop_point?.id || `${depLat.toFixed(4)},${depLon.toFixed(4)}`;
     const depName = fromObj?.stop_point?.name || fromObj?.name || fromObj?.address?.label || 'Station';
 
-    // Lignes et modes
     const lines    = [];
     const modesSet = new Set();
     sections.filter(s => s.type === 'public_transport').forEach(s => {
@@ -2722,14 +2754,12 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
       if (pm) modesSet.add(pm);
     });
 
-    const key = depId;
-    if (!candidates1.has(key) || candidates1.get(key).duration_sec > j.duration) {
-      candidates1.set(key, {
+    if (!candidates1.has(depId) || candidates1.get(depId).duration_sec > j.duration) {
+      candidates1.set(depId, {
         station: {
-          lat: depLat, lon: depLon,
-          name: depName,
-          mode: [...modesSet][0] || 'subway',
-          lines: [...new Set(lines)],
+          lat: depLat, lon: depLon, name: depName,
+          mode:    [...modesSet][0] || 'subway',
+          lines:   [...new Set(lines)],
           prim_id: fromObj?.stop_point?.id || null,
         },
         duration_sec:    j.duration,
@@ -2748,11 +2778,10 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
     }
   }
 
-  uiLog(`PRIM P1: ${candidates1.size} candidats dans [${Math.round(minSec/60)}..${Math.round(maxSec/60)}]min`, candidates1.size ? 'ok' : 'warn');
+  uiLog(`PRIM P1: ${candidates1.size} candidats TC dans [${Math.round(minSec/60)}..${Math.round(maxSec/60)}]min`, candidates1.size ? 'ok' : 'warn');
   if (!candidates1.size) return [];
 
-  // ── PASSE 2 : confirmer avec un retour précis (optionnel, max 5) ─────────
-  // Sert à récupérer les géométries et à affiner la durée si l'ID PRIM est disponible
+  // ── PASSE 2 : confirmation sur les 5 meilleurs ────────────────────────────
   const sorted1 = [...candidates1.values()]
     .sort((a, b) => Math.abs(a.duration_sec - targetSec) - Math.abs(b.duration_sec - targetSec))
     .slice(0, 5);
@@ -2760,11 +2789,11 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
   const finalCandidates = [];
   for (const cand of sorted1) {
     const fromStr = cand.station.prim_id || `${cand.station.lon};${cand.station.lat}`;
-    const ck2 = `prim2:${fromStr}->${toStr}|${dtPrim}|${config.maxTransfers}`;
-    let cached2 = D.cache.transit.get(ck2);
+    const ck2     = `prim2:${fromStr}->${toStr}|${dtPrim}|${config.maxTransfers}`;
+    const cached2 = D.cache.transit.has(ck2) ? D.cache.transit.get(ck2) : undefined;
 
-    if (cached2 === null) { finalCandidates.push(cand); continue; } // déjà tenté KO → garder P1
-    if (cached2) { finalCandidates.push(cached2); continue; }
+    if (cached2 === null)  { finalCandidates.push(cand); continue; }
+    if (cached2 !== undefined) { finalCandidates.push(cached2); continue; }
 
     try {
       const params2 = new URLSearchParams({
@@ -2776,7 +2805,6 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
       const r2 = await fetch(`${PRIM_BASE}/journeys?${params2.toString()}`, {
         headers: { 'apikey': apiKey }, signal: AbortSignal.timeout(10000),
       });
-
       if (r2.ok) {
         const d2 = await r2.json();
         const j2 = d2.journeys?.[0];
@@ -2813,14 +2841,13 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
       uiLog(`PRIM P2 "${cand.station.name}": ${e.message}`, 'warn');
     }
     D.cache.transit.set(ck2, null);
-    finalCandidates.push(cand); // garder P1 si P2 échoue
+    finalCandidates.push(cand);
   }
 
   setPrimApiStatus('✓ PRIM actif', true);
   uiLog(`PRIM → ${finalCandidates.length} candidats (P1:${candidates1.size} P2:${sorted1.length})`, finalCandidates.length ? 'ok' : 'warn');
   return finalCandidates.length ? finalCandidates : null;
 }
-
 
 // ═══════════════════════════════════════════════════════════
 // ORCHESTRATION — PRIM uniquement (IDF)
