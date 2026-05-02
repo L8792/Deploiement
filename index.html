@@ -2691,6 +2691,7 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
       max_duration:        String(maxSec),
       max_transfers:       String(config.maxTransfers),
       count:               '50',
+      depth:               '2',  // nécessaire pour obtenir les sections
     });
     forbidden.forEach(u => params1.append('forbidden_uris[]', u));
     const url1 = `${PRIM_BASE}/journeys?${params1.toString()}`;
@@ -2724,25 +2725,27 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
   uiLog(`J0 keys: ${Object.keys(j0).join(',')}`, 'info');
   uiLog(`J0 JSON: ${JSON.stringify(j0).slice(0, 500)}`, 'info');
 
-  // ── Extraire les points de départ (sections[0].from) ──────────────────────
+  // ── Extraire les points de départ depuis j.from (stop_point PRIM) ──────────
+  // Le champ `from` du journey contient directement le stop_point de départ,
+  // même sans sections (depth=1). Avec depth=2 on aura aussi les sections.
   const candidates1 = new Map();
   for (const j of journeys1) {
     if (j.duration < minSec || j.duration > maxSec) continue;
-    const sections = (j.sections || []).filter(s => s.type !== 'waiting' && s.type !== 'transfer');
-    if (!sections.length) continue;
 
-    // Ignorer les journeys sans TC (uniquement piéton)
-    const hasTC = sections.some(s => s.type === 'public_transport');
-    if (!hasTC) continue;
+    // Le point de départ est dans j.from (toujours présent)
+    const fromObj  = j.from;
+    const fromSP   = fromObj?.stop_point;
+    if (!fromSP?.id) continue; // ignorer si pas un stop_point (ex: adresse sans TC)
 
-    const fromObj = sections[0].from;
-    const depLat  = parseFloat(fromObj?.stop_point?.coord?.lat ?? fromObj?.address?.coord?.lat ?? fromObj?.coord?.lat ?? 0);
-    const depLon  = parseFloat(fromObj?.stop_point?.coord?.lon ?? fromObj?.address?.coord?.lon ?? fromObj?.coord?.lon ?? 0);
+    const depLat  = parseFloat(fromSP.coord?.lat ?? 0);
+    const depLon  = parseFloat(fromSP.coord?.lon ?? 0);
     if (!depLat || !depLon) continue;
 
-    const depId   = fromObj?.stop_point?.id || `${depLat.toFixed(4)},${depLon.toFixed(4)}`;
-    const depName = fromObj?.stop_point?.name || fromObj?.name || fromObj?.address?.label || 'Station';
+    const depId   = fromSP.id;
+    const depName = fromSP.name || fromObj.name || 'Station';
 
+    // Extraire lignes et modes depuis les sections si disponibles (depth=2)
+    const sections = (j.sections || []).filter(s => s.type !== 'waiting' && s.type !== 'transfer');
     const lines    = [];
     const modesSet = new Set();
     sections.filter(s => s.type === 'public_transport').forEach(s => {
@@ -2752,25 +2755,34 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
         .replace(/[^a-z]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
       if (pm) modesSet.add(pm);
     });
+    // Si pas de sections, déduire le mode depuis le stop_point
+    if (!modesSet.size && fromSP.physical_modes?.length) {
+      const pm = fromSP.physical_modes[0].id?.toLowerCase().replace('physical_mode:', '') || 'subway';
+      modesSet.add(pm);
+    }
 
     if (!candidates1.has(depId) || candidates1.get(depId).duration_sec > j.duration) {
       candidates1.set(depId, {
         station: {
-          lat: depLat, lon: depLon, name: depName,
+          lat:     depLat,
+          lon:     depLon,
+          name:    depName,
           mode:    [...modesSet][0] || 'subway',
           lines:   [...new Set(lines)],
-          prim_id: fromObj?.stop_point?.id || null,
+          prim_id: depId,
         },
         duration_sec:    j.duration,
         walk_distance_m: j.distances?.walking || 0,
         transfers:       j.nb_transfers || 0,
         modes_used:      [...modesSet],
         itinerary: {
-          duration: j.duration, walkTime: j.durations?.walking || 0,
-          transitTime: j.durations?.transit || 0, transfers: j.nb_transfers || 0,
+          duration:    j.duration,
+          walkTime:    j.durations?.walking || 0,
+          transitTime: j.durations?.transit || 0,
+          transfers:   j.nb_transfers || 0,
           walkDistance: j.distances?.walking || 0,
-          legs: sections.map(s => parseNavitiaSection(s, 'subway')),
-          source: 'prim',
+          legs:        sections.map(s => parseNavitiaSection(s, 'subway')),
+          source:      'prim',
         },
         source: 'prim',
       });
@@ -2799,6 +2811,7 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
         from: fromStr, to: toStr,
         datetime: dtPrim, datetime_represents: 'arrival',
         max_transfers: String(config.maxTransfers), count: '1',
+        depth: '2',
       });
       forbidden.forEach(u => params2.append('forbidden_uris[]', u));
       const r2 = await fetch(`${PRIM_BASE}/journeys?${params2.toString()}`, {
