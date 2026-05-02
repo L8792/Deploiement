@@ -2690,23 +2690,6 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
 
   uiLog(`PRIM: to=${toStr} dt=${dtPrim} cible=[${Math.round(minSec/60)}..${Math.round(maxSec/60)}]min`, 'info');
 
-  // ── Étape 1 : Isochrone MAX ───────────────────────────────────────────────
-  const journeysMax = await fetchIsochrone(toStr, maxSec, dtPrim, config, apiKey);
-  if (!journeysMax) return null;
-  uiLog(`PRIM ISO-MAX (${Math.round(maxSec/60)}min): ${journeysMax.length} stops`, 'info');
-  if (!journeysMax.length) return [];
-
-  // ── Étape 2 : Isochrone MIN ───────────────────────────────────────────────
-  const journeysMin = await fetchIsochrone(toStr, minSec, dtPrim, config, apiKey);
-  uiLog(`PRIM ISO-MIN (${Math.round(minSec/60)}min): ${journeysMin?.length ?? '?'} stops`, 'info');
-
-  // Construire le set des stop_point IDs dans la zone MIN (trop proches)
-  const tooClose = new Set(
-    (journeysMin || [])
-      .filter(j => j.from?.stop_point?.id)
-      .map(j => j.from.stop_point.id)
-  );
-
   // Mapping mode sélectionné → physical_mode PRIM
   const modePhysicalMap = {
     subway: ['physical_mode:Metro', 'physical_mode:RapidTransit'],
@@ -2718,31 +2701,45 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
     config.modes.flatMap(m => modePhysicalMap[m] || [])
   );
 
-  // ── Étape 3 : Couronne — stops dans MAX mais pas dans MIN ─────────────────
-  // Dédupliquer par stop_point ID, garder la durée la plus proche de la cible
-  // Filtrer aussi par mode TC sélectionné (physical_modes du stop_point)
-  const coronaMap = new Map();
-  for (const j of journeysMax) {
-    const sp = j.from.stop_point;
-    if (tooClose.has(sp.id)) continue; // trop proche
+  // ── Isochrone MAX uniquement ──────────────────────────────────────────────
+  // On ne fait PLUS deux appels isochrones.
+  // Stratégie : dans l'ISO-MAX, les stops sont triés par durée croissante.
+  // Les stops les PLUS LOIN (durée proche de maxSec) sont naturellement
+  // dans la couronne [minSec..maxSec] — pas besoin de l'ISO-MIN.
+  const journeysMax = await fetchIsochrone(toStr, maxSec, dtPrim, config, apiKey);
+  if (!journeysMax) return null;
+  uiLog(`PRIM ISO-MAX (${Math.round(maxSec/60)}min): ${journeysMax.length} stops`, 'info');
+  if (!journeysMax.length) return [];
 
-    // Vérifier que ce stop a au moins un mode compatible
+  // Filtrer par mode et dédupliquer par stop_point ID
+  const stopMap = new Map();
+  for (const j of journeysMax) {
+    const sp = j.from?.stop_point;
+    if (!sp?.id) continue;
+
+    // Filtrer par mode
     const spModes = (sp.physical_modes || []).map(m => m.id);
     const hasValidMode = allowedPhysical.size === 0 ||
       spModes.some(m => allowedPhysical.has(m));
     if (!hasValidMode) continue;
 
-    if (!coronaMap.has(sp.id) || Math.abs(j.duration - targetSec) < Math.abs(coronaMap.get(sp.id).duration - targetSec)) {
-      coronaMap.set(sp.id, { journey: j, sp });
+    // Filtrer par fenêtre temporelle [minSec..maxSec]
+    if (j.duration < minSec || j.duration > maxSec) continue;
+
+    // Garder la durée la plus proche de la cible pour ce stop
+    if (!stopMap.has(sp.id) ||
+        Math.abs(j.duration - targetSec) < Math.abs(stopMap.get(sp.id).journey.duration - targetSec)) {
+      stopMap.set(sp.id, { journey: j, sp });
     }
   }
 
-  uiLog(`PRIM couronne: ${coronaMap.size} stops candidats`, coronaMap.size ? 'ok' : 'warn');
-  if (!coronaMap.size) return [];
+  uiLog(`PRIM couronne: ${stopMap.size} stops dans [${Math.round(minSec/60)}..${Math.round(maxSec/60)}]min`, stopMap.size ? 'ok' : 'warn');
+  if (!stopMap.size) return [];
 
-  // Trier par proximité à la cible, prendre les 3 meilleurs
-  const top3 = [...coronaMap.values()]
-    .sort((a, b) => Math.abs(a.journey.duration - targetSec) - Math.abs(b.journey.duration - targetSec))
+  // Prendre les 3 stops les PLUS LONGS (les plus éloignés → plus intéressants)
+  // triés par durée décroissante, puis par proximité à la cible
+  const top3 = [...stopMap.values()]
+    .sort((a, b) => b.journey.duration - a.journey.duration) // plus long d'abord
     .slice(0, 3);
 
   // ── Étape 4 : Confirmation avec sections (depth=2) ────────────────────────
