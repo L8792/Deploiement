@@ -2527,6 +2527,37 @@ function setPrimApiStatus(msg, ok = null) {
 }
 
 
+/** Formate un datetime-local → YYYYMMDDTHHmmss en heure LOCALE pour PRIM.
+ *  "2026-05-01T09:46" → "20260501T094600"  (pas de conversion UTC)
+ */
+function toPrimDatetime(isoString) {
+  const [datePart, timePart = '000000'] = isoString.split('T');
+  return datePart.replace(/-/g, '') + 'T' + timePart.replace(/:/g, '').padEnd(6, '0');
+}
+
+/** Construit la liste des forbidden_uris[] selon les modes désactivés */
+function buildForbiddenModes(activeModes) {
+  const modeMap = {
+    subway: ['physical_mode:Metro', 'physical_mode:RapidTransit'],
+    tram:   ['physical_mode:Tramway'],
+    bus:    ['physical_mode:Bus', 'physical_mode:Coach'],
+    rail:   ['physical_mode:Train', 'physical_mode:LocalTrain'],
+  };
+  const forbidden = [];
+  Object.entries(modeMap).forEach(([m, uris]) => {
+    if (!activeModes.includes(m)) forbidden.push(...uris);
+  });
+  return [...new Set(forbidden)];
+}
+
+/** Encode un GeoJSON LineString → marqueur __geojson__ pour renderTransitItinerary */
+function encodeGeoJSONtoPolyline(geojson) {
+  return '__geojson__' + JSON.stringify(
+    (geojson.coordinates || geojson.geometry?.coordinates || []).map(c => [c[1], c[0]])
+  );
+}
+
+
 function parseNavitiaSection(s, fallbackMode) {
   return {
     mode:         s.type === 'street_network' ? 'walk'
