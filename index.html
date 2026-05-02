@@ -2652,7 +2652,7 @@ async function fetchIsochrone(toStr, maxDurationSec, dtPrim, config, apiKey) {
     datetime_represents: 'arrival',
     max_duration:        String(maxDurationSec),
     max_transfers:       String(config.maxTransfers),
-    count:               '50',
+    count:               '100',
   });
   forbidden.forEach(u => params.append('forbidden_uris[]', u));
 
@@ -2707,12 +2707,31 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
       .map(j => j.from.stop_point.id)
   );
 
+  // Mapping mode sélectionné → physical_mode PRIM
+  const modePhysicalMap = {
+    subway: ['physical_mode:Metro', 'physical_mode:RapidTransit'],
+    tram:   ['physical_mode:Tramway'],
+    bus:    ['physical_mode:Bus', 'physical_mode:Coach'],
+    rail:   ['physical_mode:Train', 'physical_mode:LocalTrain', 'physical_mode:RapidTransit'],
+  };
+  const allowedPhysical = new Set(
+    config.modes.flatMap(m => modePhysicalMap[m] || [])
+  );
+
   // ── Étape 3 : Couronne — stops dans MAX mais pas dans MIN ─────────────────
   // Dédupliquer par stop_point ID, garder la durée la plus proche de la cible
+  // Filtrer aussi par mode TC sélectionné (physical_modes du stop_point)
   const coronaMap = new Map();
   for (const j of journeysMax) {
     const sp = j.from.stop_point;
     if (tooClose.has(sp.id)) continue; // trop proche
+
+    // Vérifier que ce stop a au moins un mode compatible
+    const spModes = (sp.physical_modes || []).map(m => m.id);
+    const hasValidMode = allowedPhysical.size === 0 ||
+      spModes.some(m => allowedPhysical.has(m));
+    if (!hasValidMode) continue;
+
     if (!coronaMap.has(sp.id) || Math.abs(j.duration - targetSec) < Math.abs(coronaMap.get(sp.id).duration - targetSec)) {
       coronaMap.set(sp.id, { journey: j, sp });
     }
