@@ -2646,6 +2646,7 @@ async function resolvePrimStopPoint(lon, lat, apiKey) {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     const sp = data.places?.[0]?.stop_point;
+    uiLog(`/places réponse: ${JSON.stringify(data).slice(0,300)}`, 'info');
     if (sp?.id) {
       uiLog(`  /places → "${sp.name}" (${sp.id})`, 'info');
       D.cache.transit.set(cacheKey, sp.id);
@@ -2716,14 +2717,12 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
 
   if (!journeys1.length) return null;
 
-  // Log diagnostic du 1er journey
+  // Log diagnostic complet du 1er journey
   const j0    = journeys1[0];
   const secs0 = (j0.sections || []).filter(s => s.type !== 'waiting');
   uiLog(`J0: dur=${j0.duration}s transfers=${j0.nb_transfers} sections=${secs0.length} types=${secs0.map(s=>s.type).join(',')}`, 'info');
-  if (secs0[0]) {
-    const f = secs0[0].from;
-    uiLog(`J0.from: ${JSON.stringify(f).slice(0, 200)}`, 'info');
-  }
+  uiLog(`J0 keys: ${Object.keys(j0).join(',')}`, 'info');
+  uiLog(`J0 JSON: ${JSON.stringify(j0).slice(0, 500)}`, 'info');
 
   // ── Extraire les points de départ (sections[0].from) ──────────────────────
   const candidates1 = new Map();
