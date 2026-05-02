@@ -2625,235 +2625,196 @@ function parseNavitiaSection(s, fallbackMode) {
 //             → Confirme la durée et enrichit les détails (lignes, géométries)
 // ═══════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════
-// PRIM — Logique correcte
+// PRIM — Isochrone inverse en 3 étapes
 //
-// Pour trouver des points de départ à ~30 min d'un déploiement :
-// On part de stop_points connus (Overpass ou liste fixe) situés
-// à une distance plausible, et on calcule le trajet TC vers le déploiement.
+// Étape 1 — Isochrone MAX : tous les stops atteignables en ≤ cible+tol min
+//   GET /journeys?to=déploiement&max_duration=maxSec&datetime_represents=arrival
+//   → j.from.stop_point = stop de départ, j.duration = durée réelle
 //
-// Approche :
-// 1. Charger les stop_points dans un rayon ~25 km via Overpass
-// 2. Pour chaque candidat : GET /journeys?from=stop_point_id&to=coords&datetime_represents=arrival
-// 3. Garder ceux dont la durée est dans [cible±tolérance]
+// Étape 2 — Isochrone MIN : tous les stops atteignables en ≤ cible-tol min
+//   GET /journeys?to=déploiement&max_duration=minSec&datetime_represents=arrival
+//   → stops trop proches → à exclure
+//
+// Étape 3 — Couronne = stops dans MAX mais pas dans MIN
+//   On prend les 3 meilleurs (les plus proches de la durée cible)
+//   et on confirme chacun avec un appel journeys?from=stop&to=déploiement
+//   pour obtenir les sections (lignes, géométries) avec depth=2
 // ═══════════════════════════════════════════════════════════
 
-// Cache des stop_points Overpass par bbox (chargé une fois par run)
-async function loadNearbyStopPoints(deploymentPoint, targetMinutes, modes) {
-  const radiusKm  = Math.min(targetMinutes * 0.6, 40); // ~60% de la vitesse TC moy
-  const radiusM   = radiusKm * 1000;
-  const dLat      = radiusM / 111320;
-  const dLon      = radiusM / (111320 * Math.cos(deploymentPoint.lat * Math.PI / 180));
-  const bbox      = `${deploymentPoint.lat - dLat},${deploymentPoint.lon - dLon},${deploymentPoint.lat + dLat},${deploymentPoint.lon + dLon}`;
-  const cacheKey  = `overpass:${bbox}|${modes.join(',')}`;
+async function fetchIsochrone(toStr, maxDurationSec, dtPrim, config, apiKey) {
+  const forbidden = buildForbiddenModes(config.modes);
+  const cacheKey  = `iso:${toStr}|${dtPrim}|${maxDurationSec}|${config.modes.join(',')}`;
   if (D.cache.transit.has(cacheKey)) return D.cache.transit.get(cacheKey);
 
-  const queries = [];
-  if (modes.includes('subway') || modes.includes('rail')) {
-    queries.push(`node["railway"="station"](${bbox});`);
-    queries.push(`node["railway"="subway_entrance"](${bbox});`);
-    queries.push(`node["public_transport"="station"](${bbox});`);
-  }
-  if (modes.includes('tram')) queries.push(`node["railway"="tram_stop"](${bbox});`);
-  if (modes.includes('bus'))  queries.push(`node["highway"="bus_stop"](${bbox});`);
-
-  if (!queries.length) return [];
-  const query   = `[out:json][timeout:20];\n(\n  ${queries.join('\n  ')}\n);\nout center tags;`;
-  const servers = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
-
-  for (let i = 0; i < servers.length * 2; i++) {
-    try {
-      const r = await fetch(servers[i % servers.length], {
-        method: 'POST', body: 'data=' + encodeURIComponent(query),
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        signal: AbortSignal.timeout(20000),
-      });
-      if (r.ok) {
-        const d    = await r.json();
-        const stops = (d.elements || []).map(e => ({
-          lat:  e.lat || e.center?.lat,
-          lon:  e.lon || e.center?.lon,
-          name: e.tags?.name || 'Station',
-          mode: e.tags?.railway === 'station' || e.tags?.railway === 'subway_entrance' ? 'subway'
-              : e.tags?.railway === 'tram_stop' ? 'tram'
-              : e.tags?.highway === 'bus_stop'  ? 'bus'
-              : 'subway',
-        })).filter(s => s.lat && s.lon);
-        D.cache.transit.set(cacheKey, stops);
-        uiLog(`Overpass: ${stops.length} stop_points dans r=${Math.round(radiusKm)}km`, 'ok');
-        return stops;
-      }
-      await new Promise(res => setTimeout(res, 1500 * (i + 1)));
-    } catch (e) {
-      await new Promise(res => setTimeout(res, 1500));
-    }
-  }
-  uiLog('Overpass inaccessible — PRIM ne peut pas fonctionner sans stop_points', 'warn');
-  return [];
-}
-
-// Résoudre l'ID PRIM natif d'un stop_point OSM via /places
-async function resolveStopId(lon, lat, name, apiKey) {
-  const ck = `place:${lon.toFixed(5)},${lat.toFixed(5)}`;
-  if (D.cache.transit.has(ck)) return D.cache.transit.get(ck);
+  const params = new URLSearchParams({
+    to:                  toStr,
+    datetime:            dtPrim,
+    datetime_represents: 'arrival',
+    max_duration:        String(maxDurationSec),
+    max_transfers:       String(config.maxTransfers),
+    count:               '50',
+  });
+  forbidden.forEach(u => params.append('forbidden_uris[]', u));
 
   try {
-    // Chercher par nom + coord
-    const params = new URLSearchParams({ q: name, 'type[]': 'stop_point', count: '5' });
-    const r = await fetch(`${PRIM_BASE}/places?${params}`, {
-      headers: { 'apikey': apiKey }, signal: AbortSignal.timeout(5000),
+    const r = await fetch(`${PRIM_BASE}/journeys?${params}`, {
+      headers: { 'apikey': apiKey },
+      signal:  AbortSignal.timeout(15000),
     });
-    if (r.ok) {
-      const data = await r.json();
-      // Trouver le stop_point le plus proche des coords OSM
-      const sp = (data.places || [])
-        .filter(p => p.stop_point)
-        .map(p => {
-          const spLat = parseFloat(p.stop_point.coord?.lat || 0);
-          const spLon = parseFloat(p.stop_point.coord?.lon || 0);
-          const dist  = Math.hypot(spLat - lat, spLon - lon);
-          return { id: p.stop_point.id, name: p.stop_point.name, dist };
-        })
-        .sort((a, b) => a.dist - b.dist)[0];
-      if (sp && sp.dist < 0.005) { // < ~500m en degrés
-        D.cache.transit.set(ck, sp.id);
-        return sp.id;
-      }
-    }
-  } catch (_) {}
-
-  // Fallback : coords brutes (PRIM accepte lon;lat)
-  const coords = `${lon};${lat}`;
-  D.cache.transit.set(ck, coords);
-  return coords;
+    if (r.status === 401) { setPrimApiStatus('✗ Clé invalide', false); return null; }
+    if (r.status === 403) { setPrimApiStatus('✗ Quota dépassé', false); return null; }
+    if (!r.ok) { uiLog(`PRIM isochrone HTTP ${r.status}`, 'warn'); return null; }
+    const data = await r.json();
+    if (data.error) { uiLog(`PRIM error: ${data.error.id}`, 'warn'); return null; }
+    const journeys = (data.journeys || []).filter(j => j.from?.stop_point?.id);
+    D.cache.transit.set(cacheKey, journeys);
+    return journeys;
+  } catch (e) {
+    uiLog(`PRIM isochrone error: ${e.message}`, 'warn');
+    return null;
+  }
 }
 
-async function fetchDepartureCandidatesPRIM(deploymentPoint, config, stopPoints) {
+async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
   const apiKey = getPrimApiKey();
   const dt     = document.getElementById('depDateTime')?.value;
-  if (!apiKey || !dt || !stopPoints.length) return null;
+  if (!apiKey || !dt) return null;
   if (!isInIDF(deploymentPoint.lat, deploymentPoint.lon)) return null;
 
   const dtPrim    = toPrimDatetime(dt);
   const targetSec = config.targetMinutes * 60;
   const tolSec    = config.toleranceMinutes * 60;
-  const minSec    = targetSec - tolSec;
+  const minSec    = Math.max(60, targetSec - tolSec);
   const maxSec    = targetSec + tolSec;
-  const forbidden = buildForbiddenModes(config.modes);
   const toStr     = `${deploymentPoint.lon};${deploymentPoint.lat}`;
 
-  // Sélectionner les stop_points à bonne distance géométrique
-  // En supposant ~25 km/h en TC, la distance pour targetMin minutes
-  const speedKmh   = 25;
-  const targetDistM = (targetSec / 3600) * speedKmh * 1000;
-  const candidates = stopPoints
-    .map(s => ({ ...s, dist: haversine(s, deploymentPoint) }))
-    .filter(s => {
-      // Garder les stops entre min_dist et max_dist pour que le trajet TC
-      // soit plausiblement dans la fenêtre [minSec..maxSec]
-      const minDistM = (minSec / 3600) * speedKmh * 1000 * 0.4; // marge basse
-      const maxDistM = (maxSec / 3600) * speedKmh * 1000 * 1.8; // marge haute
-      return s.dist >= minDistM && s.dist <= maxDistM;
-    })
-    .sort((a, b) => Math.abs(a.dist - targetDistM) - Math.abs(b.dist - targetDistM))
-    .slice(0, 15); // max 15 appels PRIM
+  uiLog(`PRIM: to=${toStr} dt=${dtPrim} cible=[${Math.round(minSec/60)}..${Math.round(maxSec/60)}]min`, 'info');
 
-  uiLog(`PRIM: ${candidates.length} stop_points candidats (sur ${stopPoints.length}) · to=${toStr} dt=${dtPrim}`, 'info');
-  if (!candidates.length) return [];
+  // ── Étape 1 : Isochrone MAX ───────────────────────────────────────────────
+  const journeysMax = await fetchIsochrone(toStr, maxSec, dtPrim, config, apiKey);
+  if (!journeysMax) return null;
+  uiLog(`PRIM ISO-MAX (${Math.round(maxSec/60)}min): ${journeysMax.length} stops`, 'info');
+  if (!journeysMax.length) return [];
 
-  const resultMap = new Map();
-  let primOk = false;
+  // ── Étape 2 : Isochrone MIN ───────────────────────────────────────────────
+  const journeysMin = await fetchIsochrone(toStr, minSec, dtPrim, config, apiKey);
+  uiLog(`PRIM ISO-MIN (${Math.round(minSec/60)}min): ${journeysMin?.length ?? '?'} stops`, 'info');
 
-  for (const stop of candidates) {
-    const fromStr = `${stop.lon};${stop.lat}`;
-    const ck = `prim:${fromStr}->${toStr}|${dtPrim}|${config.maxTransfers}|${config.modes.join(',')}`;
-    if (D.cache.transit.has(ck)) {
-      const cached = D.cache.transit.get(ck);
-      if (cached) resultMap.set(stop.name + fromStr, cached);
-      continue;
-    }
+  // Construire le set des stop_point IDs dans la zone MIN (trop proches)
+  const tooClose = new Set(
+    (journeysMin || [])
+      .filter(j => j.from?.stop_point?.id)
+      .map(j => j.from.stop_point.id)
+  );
 
-    const params = new URLSearchParams({
-      from:                fromStr,
-      to:                  toStr,
-      datetime:            dtPrim,
-      datetime_represents: 'arrival',
-      max_transfers:       String(config.maxTransfers),
-      count:               '1',
-      depth:               '2',
-    });
-    forbidden.forEach(u => params.append('forbidden_uris[]', u));
-
-    try {
-      const r = await fetch(`${PRIM_BASE}/journeys?${params}`, {
-        headers: { 'apikey': apiKey }, signal: AbortSignal.timeout(10000),
-      });
-      if (r.status === 401) { setPrimApiStatus('✗ Clé invalide', false); return null; }
-      if (r.status === 403) { setPrimApiStatus('✗ Quota dépassé', false); return null; }
-      if (!r.ok) { D.cache.transit.set(ck, null); continue; }
-
-      const data = await r.json();
-      if (data.error) { D.cache.transit.set(ck, null); continue; }
-
-      const j = data.journeys?.[0];
-      if (!j) { D.cache.transit.set(ck, null); continue; }
-      if (j.duration < minSec || j.duration > maxSec) { D.cache.transit.set(ck, null); continue; }
-
-      primOk = true;
-      const sections = (j.sections || []).filter(s => s.type !== 'waiting' && s.type !== 'transfer');
-      const hasTC    = sections.some(s => s.type === 'public_transport');
-      if (!hasTC) { D.cache.transit.set(ck, null); continue; }
-
-      const lines = []; const modesSet = new Set();
-      sections.filter(s => s.type === 'public_transport').forEach(s => {
-        const l = s.display_informations?.label || s.display_informations?.code;
-        if (l) lines.push(l);
-        const pm = (s.display_informations?.physical_mode || '').toLowerCase()
-          .replace(/[^a-z]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'');
-        if (pm) modesSet.add(pm);
-      });
-
-      // Nom de la station de départ depuis la 1ère section TC
-      const firstTC  = sections.find(s => s.type === 'public_transport');
-      const stName   = firstTC?.from?.stop_point?.name || firstTC?.from?.name || stop.name;
-
-      const cand = {
-        station: {
-          lat: stop.lat, lon: stop.lon, name: stName,
-          mode: [...modesSet][0] || stop.mode, lines: [...new Set(lines)],
-          prim_id: firstTC?.from?.stop_point?.id || null,
-        },
-        duration_sec:    j.duration,
-        walk_distance_m: j.distances?.walking || 0,
-        transfers:       j.nb_transfers || 0,
-        modes_used:      [...modesSet],
-        itinerary: {
-          duration: j.duration, walkTime: j.durations?.walking || 0,
-          transitTime: j.durations?.transit || 0, transfers: j.nb_transfers || 0,
-          walkDistance: j.distances?.walking || 0,
-          legs: sections.map(s => parseNavitiaSection(s, stop.mode)),
-          source: 'prim',
-        },
-        source: 'prim',
-      };
-      D.cache.transit.set(ck, cand);
-      resultMap.set(stName + fromStr, cand);
-    } catch (e) {
-      uiLog(`PRIM "${stop.name}": ${e.message}`, 'warn');
-      D.cache.transit.set(ck, null);
+  // ── Étape 3 : Couronne — stops dans MAX mais pas dans MIN ─────────────────
+  // Dédupliquer par stop_point ID, garder la durée la plus proche de la cible
+  const coronaMap = new Map();
+  for (const j of journeysMax) {
+    const sp = j.from.stop_point;
+    if (tooClose.has(sp.id)) continue; // trop proche
+    if (!coronaMap.has(sp.id) || Math.abs(j.duration - targetSec) < Math.abs(coronaMap.get(sp.id).duration - targetSec)) {
+      coronaMap.set(sp.id, { journey: j, sp });
     }
   }
 
-  if (primOk) setPrimApiStatus('✓ PRIM actif', true);
-  const results = [...resultMap.values()];
-  uiLog(`PRIM → ${results.length} candidats (${candidates.length} testés)`, results.length ? 'ok' : 'warn');
-  return results.length ? results : null;
+  uiLog(`PRIM couronne: ${coronaMap.size} stops candidats`, coronaMap.size ? 'ok' : 'warn');
+  if (!coronaMap.size) return [];
+
+  // Trier par proximité à la cible, prendre les 3 meilleurs
+  const top3 = [...coronaMap.values()]
+    .sort((a, b) => Math.abs(a.journey.duration - targetSec) - Math.abs(b.journey.duration - targetSec))
+    .slice(0, 3);
+
+  // ── Étape 4 : Confirmation avec sections (depth=2) ────────────────────────
+  const forbidden = buildForbiddenModes(config.modes);
+  const finalCandidates = [];
+
+  for (const { journey: jBase, sp } of top3) {
+    const fromStr = `${sp.coord.lon};${sp.coord.lat}`;
+    const ck      = `prim-conf:${sp.id}->${toStr}|${dtPrim}`;
+    const cached  = D.cache.transit.has(ck) ? D.cache.transit.get(ck) : undefined;
+
+    let jConfirmed = null;
+    if (cached !== undefined && cached !== null) {
+      jConfirmed = cached;
+    } else if (cached !== null) {
+      try {
+        const p = new URLSearchParams({
+          from: fromStr, to: toStr,
+          datetime: dtPrim, datetime_represents: 'arrival',
+          max_transfers: String(config.maxTransfers),
+          count: '1', depth: '2',
+        });
+        forbidden.forEach(u => p.append('forbidden_uris[]', u));
+        const r = await fetch(`${PRIM_BASE}/journeys?${p}`, {
+          headers: { 'apikey': apiKey }, signal: AbortSignal.timeout(10000),
+        });
+        if (r.ok) {
+          const d = await r.json();
+          jConfirmed = d.journeys?.[0] || null;
+          D.cache.transit.set(ck, jConfirmed);
+        } else {
+          D.cache.transit.set(ck, null);
+        }
+      } catch (e) {
+        uiLog(`PRIM conf "${sp.name}": ${e.message}`, 'warn');
+        D.cache.transit.set(ck, null);
+      }
+    }
+
+    // Utiliser le journey confirmé ou le journey de l'isochrone
+    const j       = jConfirmed || jBase;
+    const sections = (j.sections || []).filter(s => s.type !== 'waiting' && s.type !== 'transfer');
+    const lines    = [];
+    const modesSet = new Set();
+    sections.filter(s => s.type === 'public_transport').forEach(s => {
+      const l = s.display_informations?.label || s.display_informations?.code;
+      if (l) lines.push(l);
+      const pm = (s.display_informations?.physical_mode || '').toLowerCase()
+        .replace(/[^a-z]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+      if (pm) modesSet.add(pm);
+    });
+    if (!modesSet.size) modesSet.add(sp.physical_modes?.[0]?.id?.replace('physical_mode:', '').toLowerCase() || 'subway');
+
+    const stName = sections.find(s => s.type === 'public_transport')?.from?.stop_point?.name || sp.name;
+
+    finalCandidates.push({
+      station: {
+        lat:     parseFloat(sp.coord.lat),
+        lon:     parseFloat(sp.coord.lon),
+        name:    stName,
+        mode:    [...modesSet][0] || 'subway',
+        lines:   [...new Set(lines)],
+        prim_id: sp.id,
+      },
+      duration_sec:    j.duration,
+      walk_distance_m: j.distances?.walking || 0,
+      transfers:       j.nb_transfers || 0,
+      modes_used:      [...modesSet],
+      itinerary: {
+        duration:    j.duration,
+        walkTime:    j.durations?.walking || 0,
+        transitTime: j.durations?.transit || 0,
+        transfers:   j.nb_transfers || 0,
+        walkDistance: j.distances?.walking || 0,
+        legs:        sections.map(s => parseNavitiaSection(s, [...modesSet][0] || 'subway')),
+        source:      'prim',
+      },
+      source: 'prim',
+    });
+  }
+
+  setPrimApiStatus('✓ PRIM actif', true);
+  uiLog(`PRIM → ${finalCandidates.length} candidats confirmés`, finalCandidates.length ? 'ok' : 'warn');
+  return finalCandidates.length ? finalCandidates : null;
 }
 
 // ═══════════════════════════════════════════════════════════
 // ORCHESTRATION — PRIM uniquement (IDF)
 // ═══════════════════════════════════════════════════════════
-async function generateDepartureCandidates(deploymentPoint, deploymentIdx, config, stopPoints) {
-  const raw = await fetchDepartureCandidatesPRIM(deploymentPoint, config, stopPoints || []);
+async function generateDepartureCandidates(deploymentPoint, deploymentIdx, config) {
+  const raw = await fetchDepartureCandidatesPRIM(deploymentPoint, config);
   return (raw || []).map(c => ({ ...c, deploymentIdx, deploymentPoint }));
 }
 
@@ -3126,7 +3087,6 @@ async function runDepartures() {
 
   const primKey = getPrimApiKey();
   const inIDF   = D.selected.every(s => isInIDF(s.lat, s.lon));
-  let allStations = [];
   if (!primKey || !inIDF) {
     // Hors IDF ou sans clé : non pris en charge
     const reason = !primKey
@@ -3142,24 +3102,10 @@ async function runDepartures() {
     return;
 
   } else {
-    // ── Mode PRIM — charger les stop_points Overpass ──
-    setDepStatus('Chargement des stations proches…', 'running');
-    try {
-      for (const dep of D.selected) {
-        const pts = await loadNearbyStopPoints(dep, cfg.targetMinutes, cfg.modes);
-        // Fusionner sans doublons (par coords arrondies)
-        pts.forEach(p => {
-          const k = `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`;
-          if (!allStations.some(s => `${s.lat.toFixed(4)},${s.lon.toFixed(4)}` === k)) allStations.push(p);
-        });
-      }
-      setDepStep('tc_data', 'done', `${allStations.length} stations · PRIM IDFM actif`);
-      setPrimApiStatus('Prêt — calcul en cours…');
-      uiLog(`Mode PRIM actif · ${allStations.length} stop_points chargés`, 'ok');
-    } catch (e) {
-      uiLog(`⚠ Overpass: ${e.message} — PRIM continue sans stop_points pré-chargés`, 'warn');
-      setDepStep('tc_data', 'done', 'PRIM IDFM actif (Overpass indisponible)');
-    }
+    // ── Mode PRIM : isochrone inverse, pas besoin d'Overpass ──
+    setDepStep('tc_data', 'done', 'PRIM IDFM — isochrone inverse');
+    setPrimApiStatus('Prêt — calcul en cours…');
+    uiLog('Mode PRIM actif — isochrone inverse (MIN + MAX + couronne)', 'ok');
   }
 
   // ───── ÉTAPE 2 : Génération candidats ─────
@@ -3170,7 +3116,7 @@ async function runDepartures() {
   for (let i = 0; i < D.selected.length; i++) {
     const dep = D.selected[i];
     setDepStatus(`Candidats joueur ${i + 1}/${D.selected.length}…`, 'running');
-    const cands = await generateDepartureCandidates(dep, i, cfg, allStations);
+    const cands = await generateDepartureCandidates(dep, i, cfg);
     candidatesPerPoint.push(cands);
     uiLog(`  pt${i + 1}: ${cands.length} candidats`);
   }
