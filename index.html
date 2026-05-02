@@ -2663,18 +2663,16 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config, allStations
   const forbidden = buildForbiddenModes(config.modes);
 
   // ── Trouver la station TC la plus proche du déploiement ──
+  // Station ancre = la plus proche du déploiement dans Overpass,
+  // ou les coords du déploiement lui-même si Overpass n'a rien retourné
+  // (PRIM résoudra le stop_point le plus proche automatiquement)
   const nearDep = allStations
     .map(s => ({ ...s, dist: haversine(s, deploymentPoint) }))
     .filter(s => s.dist < 1500)
     .sort((a, b) => a.dist - b.dist);
-  if (!nearDep.length) {
-    uiLog('PRIM: aucune station à <1500m du déploiement', 'warn');
-    return null;
-  }
-  const anchorStation = nearDep[0];
-  // Résoudre l'ancre via /places PRIM pour obtenir son ID natif
+  const anchorStation   = nearDep[0] || { lat: deploymentPoint.lat, lon: deploymentPoint.lon, name: 'Déploiement', dist: 0 };
   const anchorCoordsStr = `${anchorStation.lon};${anchorStation.lat}`;
-  let   anchorStr       = anchorCoordsStr; // sera affiné si PRIM renvoie un stop_point ID
+  let   anchorStr       = anchorCoordsStr; // sera affiné avec l'ID PRIM natif après la passe 1
   uiLog(`PRIM ancre: "${anchorStation.name}" (${Math.round(anchorStation.dist)}m du déploiement)`, 'info');
 
   // ── PASSE 1 : Isochrone aller (toutes les stations atteignables depuis l'ancre) ──
@@ -3210,8 +3208,13 @@ async function runDepartures() {
 
   if (cfg.walkOnly) {
     setDepStep('tc_data', 'skip', 'mode marche seule');
+
   } else if (primKey && inIDF) {
-    // Mode PRIM : on charge quand même les stations Overpass pour les utiliser comme candidats
+    // ── Mode PRIM ──
+    // Overpass est utilisé comme aide pour trouver les stations ancres.
+    // Si Overpass est indisponible, PRIM peut quand même fonctionner
+    // en utilisant directement les coords des déploiements comme ancre.
+    setDepStatus('Chargement stations Overpass (optionnel)…', 'running');
     const lats = D.selected.map(s => s.lat);
     const lons = D.selected.map(s => s.lon);
     const radiusM = (cfg.targetMinutes / 60) * 25 * 1000 * 1.6;
@@ -3222,16 +3225,17 @@ async function runDepartures() {
       allStations = await fetchTransitStations(bbox, cfg.modes);
       D.departures.transitStations = allStations;
       setDepStep('tc_data', 'done', `${allStations.length} stations · PRIM IDFM actif`);
-      setPrimApiStatus('Prêt — calcul en cours…');
-      uiLog(`✓ ${allStations.length} stations Overpass · PRIM va calculer les itinéraires réels`, 'ok');
+      uiLog(`✓ ${allStations.length} stations Overpass · PRIM actif`, 'ok');
     } catch (e) {
-      setDepStep('tc_data', 'error', e.message);
-      showModal('Données TC indisponibles', "Overpass n'a pas pu être joint pour charger les stations.");
-      btn.disabled = false;
-      return;
+      // Overpass KO mais non bloquant : PRIM utilisera les coords directement
+      uiLog(`⚠ Overpass indisponible (${e.message}) — PRIM continue sans stations Overpass`, 'warn');
+      setDepStep('tc_data', 'done', 'PRIM IDFM actif (sans Overpass)');
+      allStations = [];
     }
+    setPrimApiStatus('Prêt — calcul en cours…');
+
   } else {
-    // Fallback : charger les stations Overpass une fois pour tous
+    // ── Mode fallback estimation locale ──
     if (primKey) {
       uiLog('⚠ Clé PRIM présente mais déploiements hors IDF → fallback estimation', 'warn');
       setPrimApiStatus('⚠ Hors IDF — estimation locale', null);
@@ -3244,16 +3248,29 @@ async function runDepartures() {
     const dLat = radiusM / 111320;
     const dLon = radiusM / (111320 * Math.cos((Math.min(...lats) + Math.max(...lats)) / 2 * Math.PI / 180));
     const bbox = `${Math.min(...lats) - dLat},${Math.min(...lons) - dLon},${Math.max(...lats) + dLat},${Math.max(...lons) + dLon}`;
-    try {
-      allStations = await fetchTransitStations(bbox, cfg.modes);
-      D.departures.transitStations = allStations;
-      setDepStep('tc_data', 'done', `${allStations.length} stations Overpass (fallback)`);
-      uiLog(`✓ ${allStations.length} stations chargées (fallback)`, 'ok');
-    } catch (e) {
-      setDepStep('tc_data', 'error', e.message);
-      showModal('Données TC indisponibles', "Overpass n'a pas pu être joint. Réessaie dans quelques secondes.");
-      btn.disabled = false;
-      return;
+    setDepStatus('Chargement stations Overpass…', 'running');
+    // Retry 2x avec délai croissant
+    let overpassOk = false;
+    for (let attempt = 0; attempt < 2 && !overpassOk; attempt++) {
+      if (attempt > 0) {
+        uiLog(`Overpass retry ${attempt}…`, 'info');
+        await new Promise(res => setTimeout(res, 2000 * attempt));
+      }
+      try {
+        allStations = await fetchTransitStations(bbox, cfg.modes);
+        D.departures.transitStations = allStations;
+        setDepStep('tc_data', 'done', `${allStations.length} stations Overpass`);
+        uiLog(`✓ ${allStations.length} stations chargées`, 'ok');
+        overpassOk = true;
+      } catch (e) {
+        uiLog(`Overpass tentative ${attempt + 1} échouée: ${e.message}`, 'warn');
+      }
+    }
+    if (!overpassOk) {
+      // Fallback ultime : estimation géométrique sans stations
+      uiLog('⚠ Overpass inaccessible — estimation géométrique sans stations réelles', 'warn');
+      setDepStep('tc_data', 'done', 'Estimation géométrique (Overpass indisponible)');
+      allStations = [];
     }
   }
 
