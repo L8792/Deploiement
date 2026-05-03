@@ -2483,35 +2483,42 @@ function decodeGooglePolyline(encoded, precision = 5) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// PRIM — Calculateur IDFM (Île-de-France Mobilités)
-// Endpoint : https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/journeys
-// Auth     : header apikey
-// Fallback : estimation locale si hors IDF ou clé absente
+// PRIM AUDIT PATCH — v2.0
+// 
+// INSTRUCTIONS : Dans le fichier original, REMPLACER toutes les fonctions
+// entre "PRIM" et "ORCHESTRATION" par ce code.
+//
+// PROBLÈMES CORRIGÉS :
+// 1. Navitia /journeys requiert OBLIGATOIREMENT from ET to pour retourner
+//    de vrais itinéraires TC. Sans from, il retourne uniquement du walking.
+//    → FIX: On utilise from=coordonnées + to=stop_point du déploiement
+//    
+// 2. Le paramètre `max_duration` n'est PAS un paramètre valide de /journeys
+//    dans PRIM. C'est un paramètre de l'endpoint /isochrones séparé.
+//    → FIX: On enlève max_duration et on filtre côté client
+//
+// 3. `count: '100'` est trop agressif et PRIM peut timeout ou tronquer.
+//    → FIX: On utilise count=5 par requête et on fait N requêtes
+//
+// 4. La logique d'isochrone inverse (sans from) ne marche pas sur PRIM.
+//    → FIX: On cherche les stations Overpass, puis on fait from=station to=déploiement
+//
+// 5. Logs insuffisants pour diagnostiquer.
+//    → FIX: Chaque appel HTTP est loggé avec URL, params, status, body
 // ═══════════════════════════════════════════════════════════
 
 const PRIM_BASE = 'https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia';
-
-// Bbox IDF (élargie légèrement pour inclure les marges)
 const IDF_BBOX = { latMin: 47.9, latMax: 49.2, lonMin: 1.4, lonMax: 3.6 };
+function isInIDF(lat, lon) { return lat >= IDF_BBOX.latMin && lat <= IDF_BBOX.latMax && lon >= IDF_BBOX.lonMin && lon <= IDF_BBOX.lonMax; }
 
-function isInIDF(lat, lon) {
-  return lat >= IDF_BBOX.latMin && lat <= IDF_BBOX.latMax
-      && lon >= IDF_BBOX.lonMin && lon <= IDF_BBOX.lonMax;
-}
-
-// Clé PRIM obfusquée (XOR, split 3 morceaux — non lisible en clair dans le source)
-// Seed + morceaux séparés intentionnellement dans des contextes différents
+// Clé PRIM obfusquée (identique à l'original)
 const _ks = [68, 43, 113, 147, 162, 95, 225, 56];
 function _dk(arr) { return arr.map((b,i) => String.fromCharCode(b ^ _ks[i % _ks.length])).join(''); }
-// Morceaux stockés séparément pour éviter la reconstruction triviale
 const _ka = [17, 103, 4, 234, 237, 28, 163, 81, 124, 123];
 const _kb = [7, 170, 239, 110, 183, 107, 48, 90, 54, 162];
 const _kc = [150, 42, 216, 73, 46, 120, 29, 160, 235, 37, 147, 83];
-
 function getPrimApiKey() {
-  // Reconstruit la clé à la volée depuis les morceaux obfusqués
   const k = _dk([..._ka, ..._kb, ..._kc]);
-  // Hydrate le champ hidden pour que les autres fonctions fonctionnent normalement
   const el = document.getElementById('primApiKey');
   if (el && !el.value) el.value = k;
   return k;
@@ -2520,22 +2527,24 @@ function getPrimApiKey() {
 function setPrimApiStatus(msg, ok = null) {
   const el = document.getElementById('primApiStatus');
   if (!el) return;
-  if (ok === true)  el.style.color = 'var(--forest)';
+  if (ok === true) el.style.color = 'var(--forest)';
   else if (ok === false) el.style.color = 'var(--rust)';
   else el.style.color = 'var(--ink-4)';
   el.textContent = msg;
 }
 
-
-/** Formate un datetime-local → YYYYMMDDTHHmmss en heure LOCALE pour PRIM.
- *  "2026-05-01T09:46" → "20260501T094600"  (pas de conversion UTC)
- */
+/** YYYYMMDDTHHmmss — PRIM attend ce format EXACTEMENT */
 function toPrimDatetime(isoString) {
-  const [datePart, timePart = '000000'] = isoString.split('T');
-  return datePart.replace(/-/g, '') + 'T' + timePart.replace(/:/g, '').padEnd(6, '0');
+  // "2026-05-01T09:46" → "20260501T094600"
+  const [datePart, timePart = '00:00'] = isoString.split('T');
+  const cleanDate = datePart.replace(/-/g, '');
+  const cleanTime = timePart.replace(/:/g, '').padEnd(6, '0');
+  const result = cleanDate + 'T' + cleanTime;
+  uiLog(`[PRIM·datetime] input="${isoString}" → output="${result}"`);
+  return result;
 }
 
-/** Construit la liste des forbidden_uris[] selon les modes désactivés */
+/** Construit forbidden_uris[] pour les modes désactivés */
 function buildForbiddenModes(activeModes) {
   const modeMap = {
     subway: ['physical_mode:Metro', 'physical_mode:RapidTransit'],
@@ -2547,23 +2556,26 @@ function buildForbiddenModes(activeModes) {
   Object.entries(modeMap).forEach(([m, uris]) => {
     if (!activeModes.includes(m)) forbidden.push(...uris);
   });
-  return [...new Set(forbidden)];
+  const result = [...new Set(forbidden)];
+  uiLog(`[PRIM·modes] actifs=[${activeModes.join(',')}] → forbidden=[${result.join(', ')}]`);
+  return result;
 }
 
-/** Encode un GeoJSON LineString → marqueur __geojson__ pour renderTransitItinerary */
+/** Encode un GeoJSON en marqueur pour renderTransitItinerary */
 function encodeGeoJSONtoPolyline(geojson) {
   return '__geojson__' + JSON.stringify(
     (geojson.coordinates || geojson.geometry?.coordinates || []).map(c => [c[1], c[0]])
   );
 }
 
-
+/** Parse une section Navitia en objet leg normalisé */
 function parseNavitiaSection(s, fallbackMode) {
+  const mode = s.type === 'street_network' ? 'walk'
+    : (s.display_informations?.physical_mode || fallbackMode)
+        .toLowerCase().replace(/[^a-z]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  
   return {
-    mode:         s.type === 'street_network' ? 'walk'
-                : (s.display_informations?.physical_mode || fallbackMode)
-                    .toLowerCase().replace(/[^a-z]/g, '_')
-                    .replace(/_+/g, '_').replace(/^_|_$/g, ''),
+    mode,
     route:        s.display_informations?.label || s.display_informations?.code || '',
     routeName:    s.display_informations?.name || '',
     physicalMode: s.display_informations?.physical_mode || '',
@@ -2576,148 +2588,251 @@ function parseNavitiaSection(s, fallbackMode) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// PRIM — Isochrone inverse (arrivée au déploiement)
-//
-// Logique :
-//   Navitia /journeys?to=déploiement&datetime_represents=arrival
-//   → retourne tous les stop_points depuis lesquels on peut
-//     ARRIVER au déploiement en ≤ max_duration à l'heure voulue.
-//   Ces stop_points sont directement les points de départ candidats.
-//   Un seul appel PRIM par déploiement.
+// PRIM HTTP — wrapper avec logging exhaustif
 // ═══════════════════════════════════════════════════════════
-/**
- * Interroge PRIM pour chaque station candidate proche du déploiement.
- * Requête : GET /journeys?from=station&to=déploiement&datetime_represents=arrival
- * Parse les "sections" (structure Navitia) de chaque journey retourné.
- * @returns {Array|null} - liste de candidats, ou null si PRIM non dispo
- */
-/**
- * Génère les candidats départ via PRIM (IDF uniquement).
- *
- * Algorithme en 2 passes :
- *   PASSE 1 — Isochrone "aller" depuis la station la plus proche du déploiement.
- *     GET /journeys?from=station_deploiement&datetime_represents=departure&max_duration=...
- *     → Retourne toutes les stations atteignables en ≤ cible+tolérance.
- *       Ces stations sont les candidats de départ (le joueur y monte).
- *
- *   PASSE 2 — Pour chaque candidat, recalculer le trajet RETOUR réel :
- *     GET /journeys?from=station_candidate&to=station_deploiement&datetime_represents=arrival
- *     → Durée réelle, lignes empruntées, correspondances, géométries.
- *
- * @returns {Array|null} - candidats, ou null si PRIM non dispo → déclenche fallback
- */
-// ═══════════════════════════════════════════════════════════
-// RECHERCHE DE STATIONS TC — Overpass
-// Chargée une fois par runDepartures, utilisée par PRIM et le fallback
-// ═══════════════════════════════════════════════════════════
+let _primRequestCount = 0;
 
-// ═══════════════════════════════════════════════════════════
-// PRIM — Candidats départ (IDF uniquement)
-//
-// Logique :
-//   PASSE 1 : GET /journeys?to=déploiement&datetime_represents=arrival
-//             → PRIM retourne N journeys qui ARRIVENT au déploiement
-//             → Le `from` de chaque journey = point de départ candidat
-//             → On filtre ceux dont la durée est dans [cible±tolérance]
-//
-//   PASSE 2 : Pour les meilleurs candidats, GET /journeys?from=candidat&to=déploiement
-//             avec les IDs PRIM natifs récupérés en passe 1
-//             → Confirme la durée et enrichit les détails (lignes, géométries)
-// ═══════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════
-// PRIM — Isochrone inverse en 3 étapes
-//
-// Étape 1 — Isochrone MAX : tous les stops atteignables en ≤ cible+tol min
-//   GET /journeys?to=déploiement&max_duration=maxSec&datetime_represents=arrival
-//   → j.from.stop_point = stop de départ, j.duration = durée réelle
-//
-// Étape 2 — Isochrone MIN : tous les stops atteignables en ≤ cible-tol min
-//   GET /journeys?to=déploiement&max_duration=minSec&datetime_represents=arrival
-//   → stops trop proches → à exclure
-//
-// Étape 3 — Couronne = stops dans MAX mais pas dans MIN
-//   On prend les 3 meilleurs (les plus proches de la durée cible)
-//   et on confirme chacun avec un appel journeys?from=stop&to=déploiement
-//   pour obtenir les sections (lignes, géométries) avec depth=2
-// ═══════════════════════════════════════════════════════════
+async function primFetch(endpoint, params, apiKey, label = '') {
+  _primRequestCount++;
+  const reqId = `PRIM#${_primRequestCount}`;
+  const url = `${PRIM_BASE}${endpoint}?${params}`;
+  
+  uiLog(`━━━ ${reqId} ${label} ━━━`, 'info');
+  uiLog(`[${reqId}] URL: ${PRIM_BASE}${endpoint}`, 'info');
+  uiLog(`[${reqId}] Params: ${decodeURIComponent(params.toString())}`, 'info');
 
-/**
- * Résout le stop_point PRIM le plus proche d'un point géographique.
- * PRIM ne calcule de vrais trajets TC que si `to` est un stop_point ID,
- * pas des coordonnées brutes (qui donnent un isochrone piéton uniquement).
- */
-async function resolveNearestStopPoint(lon, lat, apiKey) {
-  const ck = `nearestSP:${lon.toFixed(5)},${lat.toFixed(5)}`;
-  if (D.cache.transit.has(ck)) return D.cache.transit.get(ck);
-
+  const t0 = performance.now();
   try {
-    const params = new URLSearchParams({
-      'type[]': 'stop_point',
-      count:    '1',
-    });
-    // Chercher via /coord/{lon};{lat}/places_nearby (endpoint Navitia pour proximité)
-    const url = `${PRIM_BASE}/coords/${lon};${lat}/places_nearby?${params}`;
     const r = await fetch(url, {
       headers: { 'apikey': apiKey },
-      signal:  AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(15000),
     });
-    if (r.ok) {
-      const data = await r.json();
-      const sp = data.places_nearby?.[0]?.stop_point;
-      if (sp?.id) {
-        uiLog(`  stop_point résolu: "${sp.name}" (${sp.id})`, 'info');
-        D.cache.transit.set(ck, sp.id);
-        return sp.id;
-      }
+    const elapsed = (performance.now() - t0).toFixed(0);
+    uiLog(`[${reqId}] HTTP ${r.status} ${r.statusText} (${elapsed}ms)`, r.ok ? 'ok' : 'error');
+
+    if (r.status === 401) {
+      uiLog(`[${reqId}] ⛔ CLÉ API INVALIDE — vérifier getPrimApiKey()`, 'error');
+      setPrimApiStatus('✗ Clé invalide (401)', false);
+      return null;
     }
-  } catch (_) {}
+    if (r.status === 403) {
+      uiLog(`[${reqId}] ⛔ QUOTA DÉPASSÉ ou accès interdit (403)`, 'error');
+      setPrimApiStatus('✗ Quota dépassé (403)', false);
+      return null;
+    }
+    if (r.status === 429) {
+      uiLog(`[${reqId}] ⛔ RATE LIMIT (429) — trop de requêtes`, 'error');
+      return null;
+    }
+    if (!r.ok) {
+      const bodyText = await r.text().catch(() => '(body unreadable)');
+      uiLog(`[${reqId}] ✗ Réponse non-OK: ${bodyText.substring(0, 300)}`, 'error');
+      return null;
+    }
 
-  // Fallback : coords brutes (résultats dégradés mais pas bloquant)
-  const coords = `${lon};${lat}`;
-  D.cache.transit.set(ck, coords);
-  uiLog(`  stop_point: fallback coords brutes`, 'warn');
-  return coords;
-}
-
-async function fetchIsochrone(toStr, maxDurationSec, dtPrim, config, apiKey) {
-  const forbidden = buildForbiddenModes(config.modes);
-  const cacheKey  = `iso:${toStr}|${dtPrim}|${maxDurationSec}|${config.modes.join(',')}`;
-  if (D.cache.transit.has(cacheKey)) return D.cache.transit.get(cacheKey);
-
-  const params = new URLSearchParams({
-    to:                  toStr,
-    datetime:            dtPrim,
-    datetime_represents: 'arrival',
-    max_duration:        String(maxDurationSec),
-    max_transfers:       String(config.maxTransfers),
-    count:               '100',
-  });
-  forbidden.forEach(u => params.append('forbidden_uris[]', u));
-
-  try {
-    const r = await fetch(`${PRIM_BASE}/journeys?${params}`, {
-      headers: { 'apikey': apiKey },
-      signal:  AbortSignal.timeout(15000),
-    });
-    if (r.status === 401) { setPrimApiStatus('✗ Clé invalide', false); return null; }
-    if (r.status === 403) { setPrimApiStatus('✗ Quota dépassé', false); return null; }
-    if (!r.ok) { uiLog(`PRIM isochrone HTTP ${r.status}`, 'warn'); return null; }
     const data = await r.json();
-    if (data.error) { uiLog(`PRIM error: ${data.error.id}`, 'warn'); return null; }
-    const journeys = (data.journeys || []).filter(j => j.from?.stop_point?.id);
-    D.cache.transit.set(cacheKey, journeys);
-    return journeys;
+
+    // Log structure de la réponse
+    if (data.error) {
+      uiLog(`[${reqId}] ⚠ Navitia error: id="${data.error.id}" msg="${data.error.message}"`, 'warn');
+      return data;
+    }
+
+    const jCount = data.journeys?.length || 0;
+    const pCount = data.places_nearby?.length || 0;
+    uiLog(`[${reqId}] ✓ Réponse OK: ${jCount} journeys, ${pCount} places_nearby`, 'ok');
+
+    // Log détail des journeys si présents
+    if (data.journeys) {
+      data.journeys.forEach((j, idx) => {
+        const fromName = j.from?.name || j.from?.stop_point?.name || j.from?.address?.label || '?';
+        const toName   = j.to?.name   || j.to?.stop_point?.name   || j.to?.address?.label   || '?';
+        const durMin   = (j.duration / 60).toFixed(1);
+        const sections = (j.sections || []).filter(s => s.type !== 'waiting');
+        const tcSections = sections.filter(s => s.type === 'public_transport');
+        const lines = tcSections.map(s => s.display_informations?.label || s.display_informations?.code || '?').join('→');
+        const walkSec = sections.filter(s => s.type === 'street_network').reduce((s, sec) => s + (sec.duration || 0), 0);
+        
+        uiLog(`[${reqId}]   j[${idx}]: ${fromName} → ${toName} | ${durMin}min | lines=${lines || 'none'} | walk=${Math.round(walkSec/60)}min | transfers=${j.nb_transfers || 0} | sections=${sections.length}`, 'info');
+        
+        // Log chaque section en détail
+        sections.forEach((s, sIdx) => {
+          const sFrom = s.from?.name || s.from?.stop_point?.name || '?';
+          const sTo   = s.to?.name   || s.to?.stop_point?.name   || '?';
+          const sMode = s.type === 'public_transport' 
+            ? `TC:${s.display_informations?.physical_mode || '?'}/${s.display_informations?.label || '?'}`
+            : s.type === 'street_network' ? `walk(${s.mode || '?'})`
+            : s.type;
+          const hasGeo = s.geojson ? `geo:${s.geojson.type}` : 'no-geo';
+          uiLog(`[${reqId}]     s[${sIdx}]: ${sMode} | ${sFrom}→${sTo} | ${s.duration}s | ${hasGeo}`, 'info');
+        });
+      });
+    }
+
+    return data;
   } catch (e) {
-    uiLog(`PRIM isochrone error: ${e.message}`, 'warn');
+    const elapsed = (performance.now() - t0).toFixed(0);
+    uiLog(`[${reqId}] ✗ EXCEPTION: ${e.name}: ${e.message} (${elapsed}ms)`, 'error');
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+      uiLog(`[${reqId}]   → Timeout 15s dépassé. PRIM peut être surchargé.`, 'warn');
+    }
     return null;
   }
 }
 
+// ═══════════════════════════════════════════════════════════
+// RÉSOLUTION stop_point PRIM le plus proche
+// ═══════════════════════════════════════════════════════════
+async function resolveNearestStopPoint(lon, lat, apiKey) {
+  const ck = `nearestSP:${lon.toFixed(5)},${lat.toFixed(5)}`;
+  if (D.cache.transit.has(ck)) {
+    const cached = D.cache.transit.get(ck);
+    uiLog(`[PRIM·resolve] Cache HIT: ${cached}`, 'info');
+    return cached;
+  }
+
+  uiLog(`[PRIM·resolve] Recherche stop_point le plus proche de [${lat.toFixed(5)}, ${lon.toFixed(5)}]...`);
+
+  const params = new URLSearchParams({
+    'type[]': 'stop_point',
+    count: '1',
+  });
+
+  const data = await primFetch(
+    `/coords/${lon};${lat}/places_nearby`,
+    params, apiKey,
+    `resolve stop_point near ${lat.toFixed(4)},${lon.toFixed(4)}`
+  );
+
+  if (data?.places_nearby?.[0]?.stop_point?.id) {
+    const sp = data.places_nearby[0].stop_point;
+    uiLog(`[PRIM·resolve] ✓ stop_point: "${sp.name}" (${sp.id})`, 'ok');
+    uiLog(`[PRIM·resolve]   coord: ${sp.coord?.lat}, ${sp.coord?.lon}`, 'info');
+    uiLog(`[PRIM·resolve]   modes: ${(sp.physical_modes || []).map(m=>m.id).join(', ')}`, 'info');
+    D.cache.transit.set(ck, sp.id);
+    return sp.id;
+  }
+
+  // Fallback coords brutes
+  const fallback = `${lon};${lat}`;
+  uiLog(`[PRIM·resolve] ⚠ Aucun stop_point trouvé, fallback coords: ${fallback}`, 'warn');
+  D.cache.transit.set(ck, fallback);
+  return fallback;
+}
+
+// ═══════════════════════════════════════════════════════════
+// RECHERCHE DE STATIONS TC via Overpass (pour générer les "from")
+// ═══════════════════════════════════════════════════════════
+async function findNearbyTransitStations(center, radiusM, activeModes) {
+  uiLog(`[PRIM·stations] Recherche Overpass: rayon=${radiusM}m, modes=[${activeModes.join(',')}]`);
+
+  const latDeg = radiusM / 111320;
+  const lonDeg = radiusM / (111320 * Math.cos(center.lat * Math.PI / 180));
+  const bbox = `${center.lat - latDeg},${center.lon - lonDeg},${center.lat + latDeg},${center.lon + lonDeg}`;
+
+  const queries = [];
+  if (activeModes.includes('subway')) {
+    queries.push(`node["railway"="station"]["station"="subway"](${bbox});`);
+    queries.push(`node["railway"="subway_entrance"](${bbox});`);
+  }
+  if (activeModes.includes('rail')) {
+    queries.push(`node["railway"="station"](${bbox});`);
+    queries.push(`node["railway"="halt"](${bbox});`);
+  }
+  if (activeModes.includes('tram')) {
+    queries.push(`node["railway"="tram_stop"](${bbox});`);
+  }
+  if (activeModes.includes('bus')) {
+    queries.push(`node["highway"="bus_stop"](${bbox});`);
+  }
+
+  if (!queries.length) {
+    uiLog(`[PRIM·stations] ⚠ Aucun mode activé pour Overpass`, 'warn');
+    return [];
+  }
+
+  const query = `[out:json][timeout:15];\n(\n  ${queries.join('\n  ')}\n);\nout center tags;`;
+  uiLog(`[PRIM·stations] Overpass query (${queries.length} clauses)...`);
+
+  try {
+    const r = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(query),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const elements = data.elements || [];
+
+    // Dédupliquer par nom+position
+    const seen = new Set();
+    const stations = [];
+    for (const e of elements) {
+      const lat = e.lat || e.center?.lat;
+      const lon = e.lon || e.center?.lon;
+      if (!lat || !lon) continue;
+      const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      stations.push({
+        lat, lon,
+        name: e.tags?.name || e.tags?.description || 'Station',
+        tags: e.tags || {},
+      });
+    }
+
+    uiLog(`[PRIM·stations] ✓ ${stations.length} stations trouvées (${elements.length} éléments bruts)`, 'ok');
+    stations.slice(0, 5).forEach(s => uiLog(`[PRIM·stations]   · "${s.name}" @ ${s.lat.toFixed(4)},${s.lon.toFixed(4)}`));
+    return stations;
+  } catch (e) {
+    uiLog(`[PRIM·stations] ✗ Overpass error: ${e.message}`, 'error');
+    return [];
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// PRIM /journeys — APPROCHE CORRIGÉE
+//
+// Stratégie CORRECTE :
+// 1. Résoudre le stop_point PRIM le plus proche du déploiement → "to"
+// 2. Trouver les stations TC candidates (Overpass) dans un rayon large
+// 3. Pour chaque station candidate, appeler :
+//    GET /journeys?from={station_lon};{station_lat}&to={stop_point_id}
+//                 &datetime={dt}&datetime_represents=arrival
+//    → Navitia calcule le trajet station→déploiement qui ARRIVE à datetime
+// 4. Filtrer par durée [cible-tol, cible+tol]
+// 5. Retourner les meilleurs candidats
+//
+// POURQUOI C'EST DIFFÉRENT DE L'ANCIEN CODE :
+// - L'ancien code n'envoyait PAS de "from", ce qui transformait /journeys
+//   en mode isochrone implicite. Or PRIM/Navitia en mode isochrone sans from
+//   retourne des journeys dégradés (marche uniquement, ou erreurs).
+// - Le paramètre max_duration N'EXISTE PAS sur /journeys standard de PRIM.
+//   C'est un paramètre de /isochrones (API séparée, quota 10/mois).
+// ═══════════════════════════════════════════════════════════
+
 async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
   const apiKey = getPrimApiKey();
   const dt     = document.getElementById('depDateTime')?.value;
-  if (!apiKey || !dt) return null;
-  if (!isInIDF(deploymentPoint.lat, deploymentPoint.lon)) return null;
+  
+  uiLog(`\n${'═'.repeat(60)}`, 'info');
+  uiLog(`[PRIM·FETCH] Début pour déploiement @ ${deploymentPoint.lat.toFixed(5)}, ${deploymentPoint.lon.toFixed(5)}`, 'info');
+  uiLog(`[PRIM·FETCH] Config: modes=[${config.modes}] cible=${config.targetMinutes}min ±${config.toleranceMinutes}min maxTransfers=${config.maxTransfers}`, 'info');
+  uiLog(`${'═'.repeat(60)}`, 'info');
+
+  if (!apiKey) {
+    uiLog(`[PRIM·FETCH] ⛔ Pas de clé API PRIM`, 'error');
+    return null;
+  }
+  if (!dt) {
+    uiLog(`[PRIM·FETCH] ⛔ Pas de datetime configuré`, 'error');
+    return null;
+  }
+  if (!isInIDF(deploymentPoint.lat, deploymentPoint.lon)) {
+    uiLog(`[PRIM·FETCH] ⛔ Hors IDF: ${deploymentPoint.lat.toFixed(4)}, ${deploymentPoint.lon.toFixed(4)}`, 'error');
+    return null;
+  }
 
   const dtPrim    = toPrimDatetime(dt);
   const targetSec = config.targetMinutes * 60;
@@ -2725,155 +2840,235 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
   const minSec    = Math.max(60, targetSec - tolSec);
   const maxSec    = targetSec + tolSec;
 
-  // Résoudre le stop_point PRIM le plus proche du déploiement
-  // CRITIQUE : PRIM ne calcule des trajets TC que si `to` est un stop_point ID
-  const toId  = await resolveNearestStopPoint(deploymentPoint.lon, deploymentPoint.lat, apiKey);
-  const toStr = toId;
-  uiLog(`PRIM: to=${toStr} dt=${dtPrim} cible=[${Math.round(minSec/60)}..${Math.round(maxSec/60)}]min`, 'info');
+  uiLog(`[PRIM·FETCH] Fenêtre durée: [${Math.round(minSec/60)}..${Math.round(maxSec/60)}] min (cible=${config.targetMinutes})`, 'info');
 
-  // Mapping mode sélectionné → physical_mode PRIM
-  const modePhysicalMap = {
-    subway: ['physical_mode:Metro', 'physical_mode:RapidTransit'],
-    tram:   ['physical_mode:Tramway'],
-    bus:    ['physical_mode:Bus', 'physical_mode:Coach'],
-    rail:   ['physical_mode:Train', 'physical_mode:LocalTrain', 'physical_mode:RapidTransit'],
-  };
-  const allowedPhysical = new Set(
-    config.modes.flatMap(m => modePhysicalMap[m] || [])
+  // ── Étape 1 : Résoudre le stop_point destination (déploiement) ──
+  uiLog(`\n[PRIM·FETCH] ── Étape 1 : Résolution stop_point destination ──`);
+  const toId = await resolveNearestStopPoint(deploymentPoint.lon, deploymentPoint.lat, apiKey);
+  uiLog(`[PRIM·FETCH] Destination PRIM: "${toId}"`, 'info');
+
+  // ── Étape 2 : Trouver des stations candidates (sources de départ) ──
+  // Rayon basé sur la durée max : ~vitesse TC moyenne 30km/h × temps max
+  const searchRadiusM = Math.min(30000, maxSec * 15); // ~15m/s = 54km/h TC moyen, plafonné 30km
+  uiLog(`\n[PRIM·FETCH] ── Étape 2 : Recherche stations candidates (rayon=${Math.round(searchRadiusM/1000)}km) ──`);
+
+  const nearbyStations = await findNearbyTransitStations(
+    deploymentPoint, searchRadiusM, config.modes
   );
 
-  // ── Isochrone MAX uniquement ──────────────────────────────────────────────
-  // On ne fait PLUS deux appels isochrones.
-  // Stratégie : dans l'ISO-MAX, les stops sont triés par durée croissante.
-  // Les stops les PLUS LOIN (durée proche de maxSec) sont naturellement
-  // dans la couronne [minSec..maxSec] — pas besoin de l'ISO-MIN.
-  const journeysMax = await fetchIsochrone(toStr, maxSec, dtPrim, config, apiKey);
-  if (!journeysMax) return null;
-  uiLog(`PRIM ISO-MAX (${Math.round(maxSec/60)}min): ${journeysMax.length} stops`, 'info');
-  if (!journeysMax.length) return [];
-
-  // Filtrer par mode et dédupliquer par stop_point ID
-  const stopMap = new Map();
-  for (const j of journeysMax) {
-    const sp = j.from?.stop_point;
-    if (!sp?.id) continue;
-
-    // Filtrer par mode
-    const spModes = (sp.physical_modes || []).map(m => m.id);
-    const hasValidMode = allowedPhysical.size === 0 ||
-      spModes.some(m => allowedPhysical.has(m));
-    if (!hasValidMode) continue;
-
-    // Filtrer par fenêtre temporelle [minSec..maxSec]
-    if (j.duration < minSec || j.duration > maxSec) continue;
-
-    // Garder la durée la plus proche de la cible pour ce stop
-    if (!stopMap.has(sp.id) ||
-        Math.abs(j.duration - targetSec) < Math.abs(stopMap.get(sp.id).journey.duration - targetSec)) {
-      stopMap.set(sp.id, { journey: j, sp });
-    }
+  if (!nearbyStations.length) {
+    uiLog(`[PRIM·FETCH] ⚠ Aucune station trouvée dans le rayon — essai avec coords brutes`, 'warn');
   }
 
-  uiLog(`PRIM couronne: ${stopMap.size} stops dans [${Math.round(minSec/60)}..${Math.round(maxSec/60)}]min`, stopMap.size ? 'ok' : 'warn');
-  if (!stopMap.size) return [];
+  // ── Étape 3 : Pour chaque station candidate, interroger PRIM ──
+  uiLog(`\n[PRIM·FETCH] ── Étape 3 : Requêtes /journeys (from=station, to=déploiement) ──`);
 
-  // Prendre les 3 stops les PLUS LONGS (les plus éloignés → plus intéressants)
-  // triés par durée décroissante, puis par proximité à la cible
-  const top3 = [...stopMap.values()]
-    .sort((a, b) => b.journey.duration - a.journey.duration) // plus long d'abord
-    .slice(0, 3);
-
-  // ── Étape 4 : Confirmation avec sections (depth=2) ────────────────────────
   const forbidden = buildForbiddenModes(config.modes);
-  const finalCandidates = [];
+  const allCandidates = [];
 
-  for (const { journey: jBase, sp } of top3) {
-    const fromStr = `${sp.coord.lon};${sp.coord.lat}`;
-    const ck      = `prim-conf:${sp.id}->${toStr}|${dtPrim}`;
-    const cached  = D.cache.transit.has(ck) ? D.cache.transit.get(ck) : undefined;
+  // Limiter à 15 stations max (triées par distance au déploiement)
+  const sortedStations = nearbyStations
+    .map(s => ({ ...s, dist: haversine(s, deploymentPoint) }))
+    .sort((a, b) => a.dist - b.dist);
 
-    let jConfirmed = null;
-    if (cached !== undefined && cached !== null) {
-      jConfirmed = cached;
-    } else if (cached !== null) {
-      try {
-        const p = new URLSearchParams({
-          from: fromStr, to: toStr,
-          datetime: dtPrim, datetime_represents: 'arrival',
-          max_transfers: String(config.maxTransfers),
-          count: '1', depth: '2',
-        });
-        forbidden.forEach(u => p.append('forbidden_uris[]', u));
-        const r = await fetch(`${PRIM_BASE}/journeys?${p}`, {
-          headers: { 'apikey': apiKey }, signal: AbortSignal.timeout(10000),
-        });
-        if (r.ok) {
-          const d = await r.json();
-          jConfirmed = d.journeys?.[0] || null;
-          D.cache.transit.set(ck, jConfirmed);
-        } else {
-          D.cache.transit.set(ck, null);
-        }
-      } catch (e) {
-        uiLog(`PRIM conf "${sp.name}": ${e.message}`, 'warn');
-        D.cache.transit.set(ck, null);
-      }
+  // Prendre les stations à distance raisonnable pour le TC
+  // On veut celles qui sont LOIN (pour qu'il y ait un trajet TC intéressant)
+  // mais pas TROP loin (pour ne pas dépasser maxSec)
+  const candidateStations = sortedStations
+    .filter(s => s.dist > 500)  // Au moins 500m (sinon marche pure)
+    .slice(0, 15);
+
+  uiLog(`[PRIM·FETCH] ${candidateStations.length} stations retenues (sur ${sortedStations.length} triées)`);
+
+  // Batch les requêtes PRIM (séquentiel pour ne pas rate-limiter)
+  for (let i = 0; i < candidateStations.length; i++) {
+    const station = candidateStations[i];
+    const fromStr = `${station.lon};${station.lat}`;
+
+    const cacheKey = `prim-j:${fromStr}->${toId}|${dtPrim}|${config.modes.join(',')}`;
+    if (D.cache.transit.has(cacheKey)) {
+      const cached = D.cache.transit.get(cacheKey);
+      uiLog(`[PRIM·FETCH] Cache HIT pour "${station.name}"`, 'info');
+      if (cached) allCandidates.push(...cached);
+      continue;
     }
 
-    // Utiliser le journey confirmé ou le journey de l'isochrone
-    const j       = jConfirmed || jBase;
-    const sections = (j.sections || []).filter(s => s.type !== 'waiting' && s.type !== 'transfer');
-    const lines    = [];
-    const modesSet = new Set();
-    sections.filter(s => s.type === 'public_transport').forEach(s => {
-      const l = s.display_informations?.label || s.display_informations?.code;
-      if (l) lines.push(l);
-      const pm = (s.display_informations?.physical_mode || '').toLowerCase()
-        .replace(/[^a-z]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-      if (pm) modesSet.add(pm);
+    const params = new URLSearchParams({
+      from:                fromStr,
+      to:                  toId,
+      datetime:            dtPrim,
+      datetime_represents: 'arrival',
+      max_transfers:       String(config.maxTransfers),
+      count:               '3',    // 3 itinéraires par station max
+      depth:               '2',    // Pour avoir les sections détaillées
+      min_nb_journeys:     '1',
     });
-    if (!modesSet.size) modesSet.add(sp.physical_modes?.[0]?.id?.replace('physical_mode:', '').toLowerCase() || 'subway');
+    forbidden.forEach(u => params.append('forbidden_uris[]', u));
 
-    const stName = sections.find(s => s.type === 'public_transport')?.from?.stop_point?.name || sp.name;
+    const data = await primFetch(
+      '/journeys', params, apiKey,
+      `station "${station.name}" → déploiement`
+    );
 
-    finalCandidates.push({
-      station: {
-        lat:     parseFloat(sp.coord.lat),
-        lon:     parseFloat(sp.coord.lon),
-        name:    stName,
-        mode:    [...modesSet][0] || 'subway',
-        lines:   [...new Set(lines)],
-        prim_id: sp.id,
-      },
-      duration_sec:    j.duration,
-      walk_distance_m: j.distances?.walking || 0,
-      transfers:       j.nb_transfers || 0,
-      modes_used:      [...modesSet],
-      itinerary: {
-        duration:    j.duration,
-        walkTime:    j.durations?.walking || 0,
-        transitTime: j.durations?.transit || 0,
-        transfers:   j.nb_transfers || 0,
-        walkDistance: j.distances?.walking || 0,
-        legs:        sections.map(s => parseNavitiaSection(s, [...modesSet][0] || 'subway')),
-        source:      'prim',
-      },
-      source: 'prim',
-    });
+    if (!data || data.error || !data.journeys?.length) {
+      D.cache.transit.set(cacheKey, []);
+      uiLog(`[PRIM·FETCH] Station "${station.name}": aucun journey valide`, 'warn');
+      continue;
+    }
+
+    // Filtrer les journeys par durée
+    const valid = [];
+    for (const j of data.journeys) {
+      const dur = j.duration;
+      
+      // Vérifier que le journey contient du TC (pas que de la marche)
+      const tcSections = (j.sections || []).filter(s => s.type === 'public_transport');
+      if (tcSections.length === 0) {
+        uiLog(`[PRIM·FETCH]   j: ${(dur/60).toFixed(1)}min — REJETÉ (marche pure, 0 section TC)`, 'warn');
+        continue;
+      }
+
+      if (dur < minSec) {
+        uiLog(`[PRIM·FETCH]   j: ${(dur/60).toFixed(1)}min — REJETÉ (trop court, min=${Math.round(minSec/60)})`, 'info');
+        continue;
+      }
+      if (dur > maxSec) {
+        uiLog(`[PRIM·FETCH]   j: ${(dur/60).toFixed(1)}min — REJETÉ (trop long, max=${Math.round(maxSec/60)})`, 'info');
+        continue;
+      }
+
+      // Extraire les infos
+      const sections = (j.sections || []).filter(s => s.type !== 'waiting' && s.type !== 'transfer');
+      const lines = [];
+      const modesSet = new Set();
+
+      tcSections.forEach(s => {
+        const l = s.display_informations?.label || s.display_informations?.code;
+        if (l) lines.push(l);
+        const pm = (s.display_informations?.physical_mode || '').toLowerCase()
+          .replace(/[^a-z]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+        if (pm) modesSet.add(pm);
+      });
+
+      // Le point de DÉPART réel est le from du premier section
+      const firstSection = (j.sections || [])[0];
+      const startPoint = firstSection?.from;
+      const startName = startPoint?.stop_point?.name || startPoint?.name || startPoint?.address?.label || station.name;
+      const startCoord = startPoint?.stop_point?.coord || startPoint?.address?.coord || { lat: station.lat, lon: station.lon };
+
+      const candidate = {
+        station: {
+          lat:     parseFloat(startCoord.lat),
+          lon:     parseFloat(startCoord.lon),
+          name:    startName,
+          mode:    [...modesSet][0] || 'subway',
+          lines:   [...new Set(lines)],
+          prim_id: startPoint?.stop_point?.id || null,
+        },
+        duration_sec:    j.duration,
+        walk_distance_m: j.distances?.walking || 0,
+        transfers:       j.nb_transfers || 0,
+        modes_used:      [...modesSet],
+        itinerary: {
+          duration:    j.duration,
+          walkTime:    j.durations?.walking || 0,
+          transitTime: j.durations?.transit || 0,
+          transfers:   j.nb_transfers || 0,
+          walkDistance: j.distances?.walking || 0,
+          legs:        sections.map(s => parseNavitiaSection(s, [...modesSet][0] || 'subway')),
+          source:      'prim',
+        },
+        source: 'prim',
+      };
+
+      valid.push(candidate);
+      uiLog(`[PRIM·FETCH]   ✓ j: ${(dur/60).toFixed(1)}min | ${startName} | lines=${lines.join('+')} | transfers=${j.nb_transfers || 0} | walk=${Math.round((j.distances?.walking||0))}m`, 'ok');
+    }
+
+    D.cache.transit.set(cacheKey, valid);
+    allCandidates.push(...valid);
+
+    // Petit délai entre requêtes pour ne pas rate-limiter PRIM
+    if (i < candidateStations.length - 1) {
+      await new Promise(r => setTimeout(r, 200));
+    }
   }
 
-  setPrimApiStatus('✓ PRIM actif', true);
-  uiLog(`PRIM → ${finalCandidates.length} candidats confirmés`, finalCandidates.length ? 'ok' : 'warn');
-  return finalCandidates.length ? finalCandidates : null;
+  // ── Étape 4 : Si pas de résultats, essayer l'approche inverse ──
+  if (allCandidates.length === 0) {
+    uiLog(`\n[PRIM·FETCH] ── Étape 4 : Fallback — approche inverse (to=déploiement, sans from) ──`, 'warn');
+    
+    const params = new URLSearchParams({
+      to:                  toId,
+      datetime:            dtPrim,
+      datetime_represents: 'arrival',
+      max_transfers:       String(config.maxTransfers),
+      count:               '10',
+    });
+    forbidden.forEach(u => params.append('forbidden_uris[]', u));
+
+    const data = await primFetch('/journeys', params, apiKey, 'FALLBACK isochrone inverse');
+    
+    if (data?.journeys?.length) {
+      for (const j of data.journeys) {
+        const tcSections = (j.sections || []).filter(s => s.type === 'public_transport');
+        if (tcSections.length === 0) continue;
+        if (j.duration < minSec || j.duration > maxSec) continue;
+
+        const sp = j.from?.stop_point;
+        if (!sp?.coord) continue;
+
+        const sections = (j.sections || []).filter(s => s.type !== 'waiting' && s.type !== 'transfer');
+        const lines = tcSections.map(s => s.display_informations?.label || '?').filter(Boolean);
+        const modesSet = new Set();
+        tcSections.forEach(s => {
+          const pm = (s.display_informations?.physical_mode || '').toLowerCase().replace(/[^a-z]/g, '_');
+          if (pm) modesSet.add(pm);
+        });
+
+        allCandidates.push({
+          station: {
+            lat: parseFloat(sp.coord.lat), lon: parseFloat(sp.coord.lon),
+            name: sp.name || '?', mode: [...modesSet][0] || 'subway',
+            lines: [...new Set(lines)], prim_id: sp.id,
+          },
+          duration_sec: j.duration, walk_distance_m: j.distances?.walking || 0,
+          transfers: j.nb_transfers || 0, modes_used: [...modesSet],
+          itinerary: {
+            duration: j.duration, walkTime: j.durations?.walking || 0,
+            transitTime: j.durations?.transit || 0, transfers: j.nb_transfers || 0,
+            walkDistance: j.distances?.walking || 0,
+            legs: sections.map(s => parseNavitiaSection(s, [...modesSet][0] || 'subway')),
+            source: 'prim',
+          },
+          source: 'prim',
+        });
+      }
+      uiLog(`[PRIM·FETCH] Fallback: ${allCandidates.length} candidats après filtre`, allCandidates.length ? 'ok' : 'warn');
+    }
+  }
+
+  // ── Résumé final ──
+  uiLog(`\n${'─'.repeat(40)}`, 'info');
+  uiLog(`[PRIM·FETCH] RÉSUMÉ: ${allCandidates.length} candidats valides`, allCandidates.length ? 'ok' : 'error');
+  allCandidates.forEach((c, i) => {
+    uiLog(`[PRIM·FETCH]   #${i+1}: "${c.station.name}" | ${(c.duration_sec/60).toFixed(1)}min | lines=${c.station.lines.join('+')} | ${c.source}`, 'info');
+  });
+  uiLog(`${'─'.repeat(40)}\n`, 'info');
+
+  setPrimApiStatus(`✓ PRIM actif (${_primRequestCount} req)`, true);
+  return allCandidates.length ? allCandidates : null;
 }
 
 // ═══════════════════════════════════════════════════════════
-// ORCHESTRATION — PRIM uniquement (IDF)
+// ORCHESTRATION — Génère les candidats pour un point de déploiement
 // ═══════════════════════════════════════════════════════════
 async function generateDepartureCandidates(deploymentPoint, deploymentIdx, config) {
+  uiLog(`\n[ORCH] ▶ Génération candidats pour déploiement #${deploymentIdx + 1} @ "${deploymentPoint.name || '?'}"`, 'info');
   const raw = await fetchDepartureCandidatesPRIM(deploymentPoint, config);
   return (raw || []).map(c => ({ ...c, deploymentIdx, deploymentPoint }));
 }
+
 
 // ═══════════════════════════════════════════════════════════
 // MATRICE DE COÛTS + ALGORITHME HONGROIS
