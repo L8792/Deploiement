@@ -2733,6 +2733,9 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
     }
   }
 
+  // Log des durées pour diagnostic
+  const durSample = [...new Set(journeysMax.filter(j=>j.from?.stop_point).map(j=>Math.round(j.duration/60)))].sort((a,b)=>a-b);
+  uiLog(`PRIM durées (min): ${durSample.join(',')}`, 'info');
   uiLog(`PRIM couronne: ${stopMap.size} stops dans [${Math.round(minSec/60)}..${Math.round(maxSec/60)}]min`, stopMap.size ? 'ok' : 'warn');
   if (!stopMap.size) return [];
 
