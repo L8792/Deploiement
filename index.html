@@ -2641,6 +2641,44 @@ function parseNavitiaSection(s, fallbackMode) {
 //   pour obtenir les sections (lignes, géométries) avec depth=2
 // ═══════════════════════════════════════════════════════════
 
+/**
+ * Résout le stop_point PRIM le plus proche d'un point géographique.
+ * PRIM ne calcule de vrais trajets TC que si `to` est un stop_point ID,
+ * pas des coordonnées brutes (qui donnent un isochrone piéton uniquement).
+ */
+async function resolveNearestStopPoint(lon, lat, apiKey) {
+  const ck = `nearestSP:${lon.toFixed(5)},${lat.toFixed(5)}`;
+  if (D.cache.transit.has(ck)) return D.cache.transit.get(ck);
+
+  try {
+    const params = new URLSearchParams({
+      'type[]': 'stop_point',
+      count:    '1',
+    });
+    // Chercher via /coord/{lon};{lat}/places_nearby (endpoint Navitia pour proximité)
+    const url = `${PRIM_BASE}/coords/${lon};${lat}/places_nearby?${params}`;
+    const r = await fetch(url, {
+      headers: { 'apikey': apiKey },
+      signal:  AbortSignal.timeout(6000),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      const sp = data.places_nearby?.[0]?.stop_point;
+      if (sp?.id) {
+        uiLog(`  stop_point résolu: "${sp.name}" (${sp.id})`, 'info');
+        D.cache.transit.set(ck, sp.id);
+        return sp.id;
+      }
+    }
+  } catch (_) {}
+
+  // Fallback : coords brutes (résultats dégradés mais pas bloquant)
+  const coords = `${lon};${lat}`;
+  D.cache.transit.set(ck, coords);
+  uiLog(`  stop_point: fallback coords brutes`, 'warn');
+  return coords;
+}
+
 async function fetchIsochrone(toStr, maxDurationSec, dtPrim, config, apiKey) {
   const forbidden = buildForbiddenModes(config.modes);
   const cacheKey  = `iso:${toStr}|${dtPrim}|${maxDurationSec}|${config.modes.join(',')}`;
@@ -2686,8 +2724,11 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
   const tolSec    = config.toleranceMinutes * 60;
   const minSec    = Math.max(60, targetSec - tolSec);
   const maxSec    = targetSec + tolSec;
-  const toStr     = `${deploymentPoint.lon};${deploymentPoint.lat}`;
 
+  // Résoudre le stop_point PRIM le plus proche du déploiement
+  // CRITIQUE : PRIM ne calcule des trajets TC que si `to` est un stop_point ID
+  const toId  = await resolveNearestStopPoint(deploymentPoint.lon, deploymentPoint.lat, apiKey);
+  const toStr = toId;
   uiLog(`PRIM: to=${toStr} dt=${dtPrim} cible=[${Math.round(minSec/60)}..${Math.round(maxSec/60)}]min`, 'info');
 
   // Mapping mode sélectionné → physical_mode PRIM
@@ -2733,9 +2774,6 @@ async function fetchDepartureCandidatesPRIM(deploymentPoint, config) {
     }
   }
 
-  // Log des durées pour diagnostic
-  const durSample = [...new Set(journeysMax.filter(j=>j.from?.stop_point).map(j=>Math.round(j.duration/60)))].sort((a,b)=>a-b);
-  uiLog(`PRIM durées (min): ${durSample.join(',')}`, 'info');
   uiLog(`PRIM couronne: ${stopMap.size} stops dans [${Math.round(minSec/60)}..${Math.round(maxSec/60)}]min`, stopMap.size ? 'ok' : 'warn');
   if (!stopMap.size) return [];
 
